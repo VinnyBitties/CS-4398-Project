@@ -7,47 +7,35 @@
 <link rel="stylesheet" href="coinflip.css">
 </head>
 <body>
+	<div class="coin-container">
 	<div class="coin" id="coin">
-	<div class="side heads">H</div>
-	<div class="side tails">T</div>
+		<div class="side heads">H</div>
+		<div class="side tails">T</div>
 	</div>
-	
+	</div>
+
 	<button onclick="flipCoin()">Flip Coin</button>
+	<div id="result"></div>
 	
 	<script>
-	/*function flipCoin() {
-	const coin = document.getElementById("coin");
+	let rotation = 0;
 
-	// Randomly choose the result
-	const heads = Math.random() < 0.5;
+	function flipCoin() {
+		const coin = document.getElementById("coin");
+		const result = document.getElementById("result");
 
-	// Restart the animation
-	coin.style.animation = "none";
-	void coin.offsetWidth;
+		const heads = Math.random() < 0.5;
 
-	coin.style.animation = heads
-		? "flipHeads 1.5s ease-out"
-		: "flipTails 1.5s ease-out";
+		// Add 5 complete rotations
+		rotation += 1800;
 
-	console.log(heads ? "Heads!" : "Tails!");
-}*/
-let rotation = 0;
+		// Add half a rotation for tails
+		if (!heads) {
+			rotation += 180;
+		}
 
-function flipCoin() {
-	const coin = document.getElementById("coin");
-
-	const heads = Math.random() < 0.5;
-
-	// Always add 5 full rotations
-	rotation += 1800;
-
-	// Add 180° if tails
-	if (!heads) {
-		rotation += 180;
+		coin.style.transform = `rotateY(${rotation}deg)`;
 	}
-
-	coin.style.transform = `rotateY(${rotation}deg)`;
-}
 	</script>
 </body>
 </html>
