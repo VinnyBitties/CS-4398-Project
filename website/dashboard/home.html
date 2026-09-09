@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Coin Flip Defense - Home</title>
+	<link rel="icon" type="image/svg+xml" href="../icon.svg">
+	<link rel="stylesheet" href="dashboard.css">
+	<style>
+	.content-container {
+		display: block;
+		background: linear-gradient(
+			135deg,
+			#d99b20,
+			#ffe082
+		);
+	}
+	
+	.coin-container {
+		/*width: 150px;
+		height: 150px;*/
+		position: relative;
+		display: flex;
+		justify-content: center;
+		perspective: 1000px;
+		margin: 50px auto;
+	}
+		
+		.coin {
+		width: 150px;
+		height: 150px;
+		position: relative;
+		transform-style: preserve-3d;
+	}
+		
+	.side {
+		position: absolute;
+		inset: 0;
+		
+		width: 100%;
+		height: 100%;
+		
+		border-radius: 50%;
+		box-sizing: border-box;
+		
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		
+		background: linear-gradient(
+			135deg,
+			#ffe082,
+			#d99b20
+		);
+		
+		border: 8px solid #b77b0b;
+		
+		font-size: 60px;
+		font-weight: bold;
+		
+		backface-visibility: hidden;
+		-webkit-backface-visibility: hidden;
+	}
+		
+	.tails {
+		transform: rotateY(180deg);
+	}
+		
+		/* Continuous spinning */
+	.spinning {
+		animation: spin 0.2s linear infinite;
+	}
+		
+	@keyframes spin {
+		from {
+			transform: rotateY(0deg);
+		}
+		
+		to {
+			transform: rotateY(360deg);
+		}
+	}
+		
+	/* Final landing animation */
+	.landing {
+		animation: none;
+		transition: transform 2.5s cubic-bezier(.05, .7, .15, 1);
+	}
+	
+	.drop-zone-container {
+		position: relative;
+		display: flex;
+		justify-content: center;
+	}
+	
+	/*SOURCE: https://developer.mozilla.org/en-US/docs/Web/API/HTML_Drag_and_Drop_API/File_drag_and_drop*/
+	#drop-zone {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 300px;
+		height: 200px;
+		padding: 1em;
+		border: 3px solid #cccccc;
+		border-radius: 4px;
+		color: slategray;
+		cursor: pointer;
+		color: white;
+		background: radial-gradient(circle, #d9b05f, #2225);
+	}
+	
+	#file-input {
+		display: none;
+	}
+	</style>
+</head>
+<body>
+	<script>
+	const params = new URLSearchParams(window.location.search);
+	const loginstatus = params.get("login");
+	console.log("login status: " + loginstatus);
+	</script>
+	
+	<nav class="sidebar">
+		<a id="here">Home</a>
+		<a href="reports">Reports</a>
+	</nav>
+	<audio src="coin-flip.mp3" id="coinFlip"></audio>
+	<div class="content-container">
+		<div class="coin-container">
+			<div class="coin" id="coin">
+				<div class="side heads">H</div>
+				<div class="side tails">T</div>
+			</div>
+		</div>
+		<div class="drop-zone-container">
+			<label id="drop-zone">
+				Click or drop to upload.
+				<input type="file" id="file-input" accept=".exe" />
+			</label>
+		</div>
+	</div>
+	<script>
+	let spinning = false;
+	let rotation = 0;
+
+	const coin = document.getElementById("coin");
+	const result = document.getElementById("result");
+	
+	function stopSignal() {
+		if (!spinning) return;
+		
+		spinning = false;
+		
+		// Stop the infinite animation
+		coin.classList.remove("spinning");
+		
+		// Force the browser to recognize the current state
+		void coin.offsetWidth;
+		
+		// Decide the final result
+		const heads = Math.random() < 0.5;
+		
+		rotation += 360;
+		
+		// Half rotation means tails
+		if (heads) {
+			rotation = Math.ceil(rotation / 360) * 360;
+		} else {
+			rotation = Math.ceil((rotation - 180) / 360) * 360 + 180;
+		}
+		coin.classList.add("landing");
+		coin.style.transform = `rotateY(${rotation}deg)`;
+		
+		setTimeout(() => {
+			result.textContent = heads ? "Heads!" : "Tails!";
+		}, 1500);
+	}
+	
+	function startSignal() {
+		if(spinning) return;
+		
+		spinning = true;
+		
+		coin.classList.add("spinning");
+		coin.classList.remove("landing");
+		void coin.offsetWidth;
+		playSound();
+	}
+	
+	const coinSound = document.getElementById("coinFlip");
+	function playSound() {
+		coinSound.currentTime = 0;
+		coinSound.play();
+	}
+	
+	const fileInput = document.getElementById("file-input");
+	const dropZone = document.getElementById("drop-zone");
+	
+	function handleFile(file) {
+		if (!file) return;
+	
+		// Validate .exe extension
+		if (!file.name.toLowerCase().endsWith(".exe")) {
+			alert("Please select an .exe file.");
+			return;
+		}
+	
+		console.log(file.name);
+	
+		dropZone.textContent = file.name;
+	
+		startSignal();
+	}
+	
+	// Normal click-to-upload
+	fileInput.addEventListener("change", (e) => {
+		handleFile(e.target.files[0]);
+	});
+	
+	// Drag over the drop zone
+	dropZone.addEventListener("dragover", (e) => {
+		e.preventDefault();
+		e.stopPropagation();
+	
+		dropZone.classList.add("drag-over");
+	});
+	
+	// Leave the drop zone
+	dropZone.addEventListener("dragleave", (e) => {
+		e.preventDefault();
+		e.stopPropagation();
+	
+		dropZone.classList.remove("drag-over");
+	});
+	
+	// Drop a file
+	dropZone.addEventListener("drop", (e) => {
+		e.preventDefault();
+		e.stopPropagation();
+	
+		dropZone.classList.remove("drag-over");
+	
+		const file = e.dataTransfer.files[0];
+		handleFile(file);
+	});
+	</script>
+</body>
+</html>
