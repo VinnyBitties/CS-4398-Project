@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coin Flip Defense</title>
+<link rel="stylesheet" href="coinflip.css">
+</head>
+<body>
+	<div class="coin" id="coin">
+	<div class="side heads">H</div>
+	<div class="side tails">T</div>
+	</div>
+	
+	<button onclick="flipCoin()">Flip Coin</button>
+	
+	<script>
+	/*function flipCoin() {
+	const coin = document.getElementById("coin");
+
+	// Randomly choose the result
+	const heads = Math.random() < 0.5;
+
+	// Restart the animation
+	coin.style.animation = "none";
+	void coin.offsetWidth;
+
+	coin.style.animation = heads
+		? "flipHeads 1.5s ease-out"
+		: "flipTails 1.5s ease-out";
+
+	console.log(heads ? "Heads!" : "Tails!");
+}*/
+let rotation = 0;
+
+function flipCoin() {
+	const coin = document.getElementById("coin");
+
+	const heads = Math.random() < 0.5;
+
+	// Always add 5 full rotations
+	rotation += 1800;
+
+	// Add 180° if tails
+	if (!heads) {
+		rotation += 180;
+	}
+
+	coin.style.transform = `rotateY(${rotation}deg)`;
+}
+	</script>
+</body>
+</html>
