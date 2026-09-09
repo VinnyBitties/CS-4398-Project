@@ -9,9 +9,7 @@
   width: 150px;
   height: 150px;
   position: relative;
-
   transform-style: preserve-3d;
-  transition: transform 1.5s cubic-bezier(.2, .8, .2, 1);
 }
 
 .side {
@@ -45,4 +43,25 @@
 
 .tails {
   transform: rotateY(180deg);
+}
+
+/* Continuous spinning */
+.spinning {
+  animation: spin 0.2s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotateY(0deg);
+  }
+
+  to {
+    transform: rotateY(360deg);
+  }
+}
+
+/* Final landing animation */
+.landing {
+  animation: none;
+  transition: transform 2.5s cubic-bezier(.05, .7, .15, 1);
 }

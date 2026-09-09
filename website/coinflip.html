@@ -13,28 +13,64 @@
 		<div class="side tails">T</div>
 	</div>
 	</div>
+	
+	<button id="stopButton" onclick="stopSignal()">
+		Stop Spin
+	</button>
+	
+	<button id="startButton" onclick="startSignal()">
+		Start Spin
+	</button>
 
-	<button onclick="flipCoin()">Flip Coin</button>
 	<div id="result"></div>
 	
 	<script>
+	let spinning = false;
 	let rotation = 0;
 
-	function flipCoin() {
-		const coin = document.getElementById("coin");
-		const result = document.getElementById("result");
-
+	const coin = document.getElementById("coin");
+	const result = document.getElementById("result");
+	
+	function stopSignal() {
+		if (!spinning) return;
+		
+		spinning = false;
+		
+		// Stop the infinite animation
+		coin.classList.remove("spinning");
+		
+		// Force the browser to recognize the current state
+		void coin.offsetWidth;
+		
+		// Decide the final result
 		const heads = Math.random() < 0.5;
-
-		// Add 5 complete rotations
-		rotation += 1800;
-
-		// Add half a rotation for tails
-		if (!heads) {
-			rotation += 180;
+		
+		rotation += 360;
+		
+		// Half rotation means tails
+		if (heads) {
+			rotation = Math.ceil(rotation / 360) * 360;
+		} else {
+			rotation = Math.ceil((rotation - 180) / 360) * 360 + 180;
 		}
-
+		coin.classList.add("landing");
 		coin.style.transform = `rotateY(${rotation}deg)`;
+		
+		setTimeout(() => {
+			result.textContent = heads ? "Heads!" : "Tails!";
+		}, 1500);
+	}
+	
+	function startSignal() {
+		if(spinning) return;
+		
+		spinning = true;
+		
+		//rotation = 0;
+		
+		coin.classList.add("spinning");
+		coin.classList.remove("landing");
+		void coin.offsetWidth;
 	}
 	</script>
 </body>
