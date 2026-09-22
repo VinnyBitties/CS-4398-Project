@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Coin Flip Defense</title>
+	<link rel="icon" type="image/svg+xml" href="icon.svg">
+	<link rel="stylesheet" href="style.css">
+</head>
+<body>
+	<div class="sign-in">
+		<h1 class="name">CoinFlip Defense</h1>
+		<div id="loginstatus"></div>
+		<div class="infobox">
+			<div class="form-row">
+				<div for="username">Username</div>
+				<input type="text" id="username" class="form-input" name="username" placeholder="Enter username" autocomplete="off" required>
+			</div>
+			<div class="form-row">
+				<div for="password">Password</div>
+				<input type="password" id="password" class="form-input" name="password" placeholder="Enter password" required>
+			</div>
+		</div>
+		<button onclick="submitInfo()" class="submit">Log In</button>
+		<div class="non-sign-in">
+			<a>Create account</a>
+			<a href="dashboard/home.html?login=0">No Sign In</a>
+		</div>
+	</div>
+	
+	<script>
+	function submitInfo() {
+		const username = document.getElementById("username").value;
+		const password = document.getElementById("password").value;
+		document.getElementById("password").value = "";
+		if(username === "" || password ==="") {
+			const status = document.getElementById("loginstatus");
+			status.textContent = "Username and password must be filled out.";
+		} else window.location.href="dashboard/home.html?login=1"
+	}
+	</script>
+</body>
+</html>
