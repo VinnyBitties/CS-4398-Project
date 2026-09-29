@@ -8,11 +8,27 @@ LLM stages, and operational configuration.
 
 ## Why Node.js
 
-`malware_detection`'s `DEMO_AND_HANDOFF.md` already specifies a "Future Node.js
-integration (design only)" for calling into the Python static analyzer via
-`child_process.spawn`. This backend implements that design in
-`src/analyzer/runAnalyzer.js` rather than picking a different stack — confirm
-with the team if that design should change before diverging from it.
+`malware_detection`'s `DEMO_AND_HANDOFF.md` originally specified a "Future
+Node.js integration (design only)" for calling into the Python static analyzer
+via `child_process.spawn`. That section was dropped in Kyle's later
+`dev-branch` rewrite, but the team confirmed (2026-09-29) Node.js is still the
+plan. This backend implements that design in `src/analyzer/runAnalyzer.js`.
+
+## Open coordination items
+
+- **Sandbox telemetry schema.** The team confirmed (2026-09-29) this project
+  uses a custom virtual sandbox, not Cuckoo Sandbox. The ML team's
+  `report_parser.py` (`ML-Axel` branch) is built specifically against Cuckoo's
+  JSON shape (`signatures`, `network`, `behavior.summary.*`). Since the custom
+  sandbox won't emit that exact format, someone needs to either make the
+  sandbox Cuckoo-compatible or update `report_parser.py`'s field mapping —
+  needs a conversation between Dynamic Analysis (Vincent, Jarrel), ML (Axel,
+  Diego), and backend before the behavioral-ML stage can be wired in for
+  real. `src/stages/httpStage.js` (below) is ready on the backend side either
+  way, since the HTTP-call pattern doesn't depend on the payload shape.
+- **Route naming.** `docs/component-plan.example.md` on `main` sketches
+  `POST /scans`; this implementation uses `POST /api/samples`. Confirm which
+  convention the frontend/dashboard expects before either becomes load-bearing.
 
 ## Setup
 
@@ -49,6 +65,12 @@ npm run dev     # starts on http://localhost:3000 by default
   longer per Week 7/8), this needs to become async — a real queue (e.g.
   BullMQ + Redis) or at minimum a background worker, so uploads don't hang
   an HTTP request for minutes.
+- `src/stages/httpStage.js` — a **second integration pattern**, for a stage
+  exposed as a long-running HTTP service rather than a spawned CLI (matches
+  the ML team's `predict.py --serve`). Implemented and tested against a mock
+  HTTP server (`npm test` / `test/httpStage.test.js`, no deps required — runs
+  even before `npm install`), but not called from any route yet — blocked on
+  the sandbox telemetry schema question above.
 
 ## Switching from the mock analyzer to the real one
 
