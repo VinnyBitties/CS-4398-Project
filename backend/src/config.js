@@ -24,6 +24,13 @@ const config = {
   maxUploadBytes: parseInt(process.env.MAX_UPLOAD_BYTES || "26214400", 10), // 25 MiB
   analyzerTimeoutMs: parseInt(process.env.ANALYZER_TIMEOUT_MS || "15000", 10),
   supportedSchemaVersions: ["1.0.0"],
+
+  // Behavioral ML stage (e.g. ML/predict.py --serve). Not wired into a
+  // route yet -- the sandbox's telemetry schema needs to be settled first
+  // (see backend/README.md "Open coordination items"). httpStage.js is
+  // ready to call this once there's an agreed report shape to send it.
+  behavioralMlUrl: process.env.BEHAVIORAL_ML_URL || "http://127.0.0.1:8000/",
+  behavioralMlTimeoutMs: parseInt(process.env.BEHAVIORAL_ML_TIMEOUT_MS || "15000", 10),
 };
 
 module.exports = config;
