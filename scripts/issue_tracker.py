@@ -378,6 +378,8 @@ if __name__ == '__main__':
     try:
         main()
     except HTTPError as error:
+        print(f"Failed endpoint: {error.url.split('?')[0]}")
+        print(error.read().decode("utf-8", errors="replace"))
         print(f'API HTTP {error.code}. ' + ('Quota reached; no paid fallback. Retry later.' if error.code == 429
                                            else 'Check credentials, permissions, model, and API availability.'))
         raise SystemExit(1)
