@@ -1,0 +1,102 @@
+name: Contribution tracker
+
+on:
+  push:
+    branches: ['CI/CD']
+  pull_request:
+    branches: [main]
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review, closed]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Create planned issues or assess a component PR
+        type: choice
+        options: [seed, review]
+        default: seed
+      pr_number:
+        description: PR number (required only for review)
+        type: string
+        required: false
+      apply:
+        description: Write changes to GitHub (main only; otherwise dry run)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: python3 scripts/issue_tracker.py validate
+      - run: python3 -m unittest discover -s tests/contribution_tracker -v
+
+  manual:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: sentinel-issue-writer
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+      checks: read
+      statuses: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Preview or apply selected operation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
+          MODE: ${{ inputs.mode }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          APPLY: ${{ inputs.apply }}
+        shell: bash
+        run: |
+          args=("$MODE")
+          if [ "$MODE" = review ]; then args+=(--pr "$PR_NUMBER"); fi
+          if [ "$APPLY" = true ]; then args+=(--apply); fi
+          python3 scripts/issue_tracker.py "${args[@]}"
+
+  automatic:
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: sentinel-issue-writer
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+      checks: read
+      statuses: read
+    steps:
+      # Only trusted main code runs with write access. Never checkout the PR head here.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Update component progress
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: python3 scripts/issue_tracker.py review --pr "$PR_NUMBER" --apply
