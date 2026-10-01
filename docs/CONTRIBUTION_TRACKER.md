@@ -1,140 +1,162 @@
-# Contribution tracker: first implementation
+# Contribution tracker: branch-based revision
 
-## Purpose
+No pull request is needed. Each configured branch has one persistent progress comment
+under its work-area parent issue. Real GitHub subissues remain independently claimable.
 
-Help floating contributors find relevant unassigned work and see evidence of progress.
-One parent issue per work area; real GitHub subissues are independently claimable tasks.
-The owner list comes from the capstone proposal. Display names are not GitHub usernames,
-so the initializer does not assign accounts automatically.
+## Update your CI/CD branch
 
-## Included files
+Replace these files from this package:
 
-- .github/workflows/contribution-tracker.yml: validation, manual operations, and gated automatic reviews.
-- .github/issue-plan.json: eight parents, 40 general tasks, stable IDs, and actual known branch mappings.
-- scripts/issue_tracker.py: standard-library-only GitHub and Gemini integration.
-- docs/project-overview.md: product context extracted from the proposal.
-- tests/contribution_tracker/test_tracker.py: mocked tests; no keys, network, or real issue writes.
+- scripts/issue_tracker.py
+- .github/workflows/contribution-tracker.yml
+- tests/contribution_tracker/test_tracker.py
+- docs/CONTRIBUTION_TRACKER.md
 
-This is a fresh replacement design. Do not run an older gemini-tracker workflow alongside
-this one after rollout; disable the old workflow yourself if it still exists. Existing
-issues from older trackers are not changed or adopted by title matching.
+Add:
 
-## On your CI/CD branch
+- .github/workflows/component-branch-changed.yml
+- tests/contribution_tracker/test_branches.py
 
-Copy the included files into your repository root without replacing unrelated files.
-Run locally from the root:
+KEEP your reviewed .github/issue-plan.json and docs/project-overview.md. Copies are
+included for a fresh install, but no configuration change is required by this revision.
+The script accepts the existing plan unchanged. No Git operations were performed for you.
+Do not retain a duplicate older contribution-tracker workflow under another filename.
+
+## Test now, before merging
+
+From the repository root, after setting GH_TOKEN and GEMINI_API_KEY in your terminal:
 
     python scripts/issue_tracker.py validate
     python -m unittest discover -s tests/contribution_tracker -v
+    python scripts/issue_tracker.py review --branch ML-Axel
 
-Pushing to CI/CD runs these checks automatically. Opening a PR to main also runs them.
-No API keys are required for these validation runs and they never create issues.
-The workflow's push filter uses the exact branch name CI/CD; change it if you choose
-another name. You control all commits, branches, pushes, and merges.
+The repository defaults to VinnyBitties/CS-4398-Project. Override with --repo owner/repo.
+The review is a DRY RUN: it calls GitHub and Gemini but writes no issues or comments.
+Existing issues are used if seeded; otherwise the local plan supplies the tasks.
+No PR number is needed. The old --pr option has been removed.
 
-For a live seed preview before merging, set GH_TOKEN to a GitHub credential with issue
-read access in your terminal, then run:
+For another branch:
 
-    python scripts/issue_tracker.py seed --repo VinnyBitties/CS-4398-Project
+    python scripts/issue_tracker.py review --branch ML-Diego
+    python scripts/issue_tracker.py review --branch "sandbox/telemetry---vinny-&-Joaquin"
 
-A live Gemini preview additionally needs GEMINI_API_KEY, an existing component PR number,
-and a GitHub token able to read PRs, checks, and statuses:
+For all configured branches:
 
-    python scripts/issue_tracker.py review --repo VinnyBitties/CS-4398-Project --pr 123
+    python scripts/issue_tracker.py review --all
 
-Replace 123 with a real mapped PR number. Do not paste keys into source files or commits.
-Seed previews use no Gemini calls. Review previews use Gemini quota but make no GitHub writes.
-The --apply flag is deliberately restricted to default-branch GitHub Actions runs.
+To deliberately ignore the previous checkpoint and reassess from the common ancestor:
 
-## After YOU merge the reviewed setup into main
+    python scripts/issue_tracker.py review --branch ML-Axel --force
 
-GitHub normally needs workflow_dispatch present on the default branch before showing
-the Run workflow button for a newly introduced workflow.
+API failures do not publish a result or advance its checkpoint. Dry runs also never
+advance checkpoints. The --apply option remains restricted to default-branch Actions.
 
-1. Confirm GEMINI_API_KEY is a repository Actions secret. GEMINI_MODEL is an optional
-   repository variable; the default is gemini-2.5-flash. Keep a free-tier project and
-   no paid fallback; availability and quotas depend on your Google project.
-2. Actions > Contribution tracker > Run workflow. Use main, mode seed, apply unchecked.
-   Read the run's Summary to review the proposed parents, children, and relationships.
-3. Review the task plan. Run seed again with apply checked to create the issues and
-   link actual subissues. This creates 48 issues on first successful application.
-   Later runs reuse stable markers and repair missing links without overwriting human
-   descriptions. If task scope changes, edit existing issues as well: seeding does not
-   synchronize previously created issue text or delete removed tasks.
-4. Use mode review, enter a mapped component PR number, and leave apply unchecked.
-   Check the AI report in the Summary, including omitted diff files and CI evidence.
-5. Run that review with apply checked to post/update one bot comment on the parent
-   issue. This does not change subissue status, assignees, labels, or descriptions.
-6. Once satisfied, set automatic_reviews to true in .github/issue-plan.json on main.
-   Creation and updates of mapped same-repository PRs into main then refresh reports,
-   including draft PRs. Closed PRs also receive a final assessment; no task auto-closes.
+## What is compared
 
-Writes use the workflow's GITHUB_TOKEN with issues: write. Reading check results needs
-checks: read and statuses: read, both declared in the workflow. Organization policy
-can still prevent these operations. The Gemini key is never supplied to GitHub comments.
+First published review: compare the component branch with its common ancestor with the
+repository's default branch. It sees changes introduced on that branch, not all existing
+files inherited from main. On later reviews, compare the last successfully published SHA
+with the latest branch SHA and include the previous report as historical context.
+If history was rewritten so the old SHA is no longer an ancestor, rebase the assessment
+on the current common ancestor. --force explicitly requests that same full refresh.
 
-## Branch mappings
+The report includes the inspected commit, comparison base, whether the branch tip is
+contained in the default branch, task evidence, next steps, and unassigned tasks.
+Code implemented on a component branch is distinct from code integrated into main.
+Ancestry does not prove review approval; squash/rebase merges may not retain ancestry.
 
-Known branches mapped during preparation:
+A small hidden checkpoint in the BOT COMMENT stores the last SHA, input fingerprint,
+and previous report. This is not a second issue backlog. Do not edit or remove the
+bot's checkpoint. Human issue descriptions and other comments are never overwritten.
+Multiple branches sharing a parent get separate progress comments and checkpoints.
 
-- ML-Axel and ML-Diego -> Machine learning (shared parent; no invented division of work).
-- backend-Dhrubo -> Backend services and orchestration.
-- sandbox/telemetry---vinny-&-Joaquin -> Dynamic analysis and sandbox.
-- dev-branch -> Integration and contribution visibility (provisional; confirm this role).
+Unchanged branch/task/check context skips Gemini. Task assignments, relevant CI results,
+overview changes, or merge containment changes can refresh the report even without a
+new component commit. Use --force if you need an explicit full reassessment.
 
-The proposal names Vincent/Jarrel for dynamic analysis, while the observed branch names
-Vinny/Joaquin. Verify those display names with the team; no GitHub identities are assigned.
-Frontend, LLM, static analysis, and documentation have empty branch lists until confirmed.
-Their backlog issues can still be created. Add exact branch names when ready. Each branch
-maps to one parent, but a parent can have several branches. CI/CD is intentionally unmapped:
-its changes are validated rather than analyzed as application progress.
+## Automatic updates after you merge the setup
 
-## What the AI sees and does
+The plan's automatic_reviews setting stays false until you enable it. Manual reviews
+are available regardless of that setting. Initialization is still a separate manual step.
 
-Each review sends the trusted project overview, task criteria/current issue text,
-PR description, bounded cumulative PR diff, and CI check results at the PR head SHA.
-Subissue assignees/state are current GitHub data. This first version does not read the
-whole codebase, issue comment discussions, optional branch plans, or CI log files.
-It reports suggested no_evidence, in_progress, or review_needed assessments and next steps.
-Closed tasks remain closed. Unassigned tasks are highlighted but not guaranteed unblocked.
+1. Actions > Contribution tracker > Run workflow > main > seed, Apply unchecked.
+2. Inspect the proposed issue hierarchy. Run seed with Apply checked to create it.
+   Existing stable IDs are reused; repeated initialization does not duplicate tasks.
+3. Run review, Branch ML-Axel, Apply unchecked to preview a real branch report.
+4. Run review with Apply checked to publish the report and save its checkpoint.
+5. When ready, set automatic_reviews: true in .github/issue-plan.json on main.
 
-A report is one persistent comment per PR under the work-area parent. Multiple owner PRs
-produce separate comments rather than overwriting each other's progress. No hidden task
-state database is maintained. Stable HTML markers identify seeded issues and bot comments.
-Do not remove those markers; titles can change without losing identity.
+Immediate push route:
+- Put ONLY .github/workflows/component-branch-changed.yml on each component branch
+  you want to notify immediately (through your own merge/copy workflow).
+- A push runs that tiny signal job; it has no checkout, secrets, or write permissions.
+- Its completion triggers Contribution tracker on the default branch using workflow_run.
+- The trusted analyzer fetches the current branch head via the API, not untrusted
+  artifacts or scripts from the signal job. It only accepts configured branch names.
+- The signal can run before the main-side setup is merged, but no analysis starts
+  until the receiver workflow exists on main and automatic_reviews is enabled.
 
-The model cannot choose arbitrary issue operations. Python validates known task IDs,
-complete coverage, statuses, and evidence paths before writing a comment. New suggestions
-stay in the report rather than becoming issues automatically. The writer rechecks PR head
-SHA/state before publishing. Manual and automatic writer jobs share a concurrency group.
+Hourly fallback:
+- At minute 23 each hour, the main workflow checks all configured branches.
+- No workflow/script is needed on component branches for this route.
+- Scheduled runs can be delayed by GitHub. It is a fallback, not an exact-time promise.
+- This also catches pushes skipped during concurrency coalescing and later CI results.
+- Remove schedule or change it to '23 */3 * * *' for less frequent polling.
 
-## Current limits
+You do NOT need to copy the Python script, task plan, tests, or overview onto component
+branches. Only the small optional signal file is branch-local. Writers always run trusted
+main/default-branch code and share a concurrency group. Never change the privileged job
+to execute component branch code. Standard application CI remains separate.
 
-- PRs must be from this repository and use a configured head branch. Direct pushes with
-  no PR do not trigger review. Open draft PRs early for visibility.
-- Only diffs are supplied, not surrounding source. Missing evidence does not imply a
-  feature is absent. A future iteration can fetch selected surrounding files if needed.
-- About 80,000 patch characters and 150,000 total context characters maximum. Omitted
-  binary/large/excluded files are counted. GitHub patches can themselves be truncated.
-- Common secret-related filenames and lockfiles are excluded; this is not a secret scanner.
-- Tests added and passing CI checks do not prove all acceptance criteria were met.
-- No automated closing, reopening, assignment, or labels yet. Keep explicit completion
-  decisions with the team. This is intentionally the first small, reviewable implementation.
-- The initializer creates all planned areas, including those without mapped branches.
-- Closed issues with matching markers are reused, not recreated or reopened.
-- Quota failures stop that run without a paid fallback or automatic retries.
-- Initializers may stop partially if an API call fails; rerun to reuse existing issues and
-  repair missing links. Concurrent manual CLI writers are not supported.
+## Workflow controls
 
-## Security boundary
+Manual inputs: mode (seed/review), branch (blank reviews all), force, apply.
+Use main in GitHub's workflow branch selector when applying writes. Before the workflow
+exists on main, test locally as above; the newly added Run workflow button may not appear.
+Validation still runs on pushes to CI/CD and PRs into main without keys or issue writes.
+An explicit local --repo is optional for this project. GEMINI_MODEL can select another
+available model; default gemini-2.5-flash. Retain your existing repository API-key secret.
 
-Validation runs branch code with read-only access and no Gemini secret. The privileged
-pull_request_target job explicitly checks out main and treats PR content as data; never
-change that checkout to the PR head or execute malware/sandbox jobs in this writer.
-Normal tests and sandbox execution belong in separate appropriately isolated workflows.
+## Current issue behavior
 
-## Verification performed
+- Eight planned parents and 40 real subissues; seed creates 48 issues on a fresh repo.
+- The proposal's owner names are coordination contacts, not assumed GitHub usernames.
+- Actual mapped branches: ML-Axel, ML-Diego, backend-Dhrubo,
+  sandbox/telemetry---vinny-&-Joaquin, and dev-branch (provisional integration mapping).
+- Confirm the sandbox naming discrepancy: proposal says Vincent/Jarrel; branch says
+  Vinny/Joaquin. No account assignments are inferred.
+- Unmapped areas can still have seeded issues; add their branch names once confirmed.
+- Subsequent seed runs repair missing links but preserve existing issue text and state.
+- Status assessments are suggestions in the branch report, not automatic closures.
+- This version never assigns, closes, reopens, deletes, or relabels issues automatically.
+- Old PR-based summary comments remain historical; new branch comments are separate.
 
-Local tests cover plan validation, dry-run non-mutation, idempotent issue creation,
-partial-seed repair, duplicate marker rejection, evidence validation, and report rendering.
-No live Gemini requests or GitHub issue writes were performed while preparing this package.
+## Evidence and limits
+
+Only changed-file patches and previous reports are supplied, not full source snapshots.
+A missing change is not proof that a feature is missing. CI summaries are tied to the
+head SHA and do not include test logs or certify all acceptance criteria. Previous AI
+claims are historical context, not independently verified evidence.
+
+Maximum about 80,000 patch characters and 150,000 total context characters. Binary,
+large, and excluded patches are counted as omitted; GitHub may truncate patches too.
+At 300 changed files the compare API may be capped, so the script refuses to publish or
+advance the checkpoint. Split the work or extend collection before attempting that case.
+Other omissions are disclosed but do not prevent publishing; use --force after adjusting
+collection limits if you need to reassess previously omitted evidence.
+
+Basic secret-related filename filtering is not a secret scanner. Avoid committing keys
+or confidential data. Gemini receives no GitHub credentials or write tools. Validate
+structured output before publishing; a model cannot select unrelated issues to edit.
+Quota errors do not trigger paid fallback or retries. All-branch runs stop on quota
+errors; completed earlier reports remain valid, and a later run skips unchanged work.
+Missing GitHub resources in an all-branch run are reported rather than closing issues.
+Hourly Actions jobs still consume private-repository minutes even when Gemini is skipped.
+
+## Verification
+
+20 local mocked tests pass: initialization idempotency, dry-run non-mutation, native
+subissue links, report validation, first branch review, incremental comparison, comment
+reuse, force refresh, rewritten history, stale SHA rejection, quota checkpoint protection,
+comparison cap, and branch marker isolation. Workflow YAML is parsed locally.
+Live Gemini/GitHub execution and Actions events still need verification in your repo.

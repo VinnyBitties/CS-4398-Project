@@ -35,7 +35,7 @@ class Tests(unittest.TestCase):
         self.plan = {'areas': [{'id':'ml','title':'ML','owners':'Axel and Diego','branches':['ML-Axel','ML-Diego'],
                       'goal':'Classify','done_when':'Reviewed', 'tasks':[
                           {'id':'ml-01','title':'Evaluate','goal':'Evaluate model','done_when':'Metrics recorded'}]}]}
-        self.context = {'tasks':[{'id':'ml-01'}], 'cumulative_diff':[{'path':'model.py'}]}
+        self.context = {'tasks':[{'id':'ml-01'}], 'diff':[{'path':'model.py'}]}
         self.report = {'summary':'Changed','tasks':[{'id':'ml-01','assessment':'review_needed','evidence':'Inference added',
                        'paths':['model.py'],'next_step':'Review it'}], 'suggestions':[]}
 
@@ -90,12 +90,12 @@ class Tests(unittest.TestCase):
         with self.assertRaises(ValueError):t.validate(self.report,self.context)
 
     def test_render_preserves_uncertainty_and_unassigned(self):
-        self.context.update(pr={'number':7,'branch':'ML-Axel','head_sha':'abc'}, omitted_paths=['big.py'])
+        self.context.update(branch={'name':'ML-Axel','head_sha':'abc','base_sha':'def','comparison':'first analysis','default_branch':'main','contained_in_default':False}, omitted_paths=['big.py'])
         self.context['tasks'][0].update(title='Evaluate',issue_number=2,state='open',assignees=[])
         body=t.render(self.report,self.context)
         self.assertIn('Unassigned',body)
         self.assertIn('1 omitted',body)
-        self.assertIn('sentinel-progress:pr-7',body)
+        self.assertIn(t.branch_marker('ML-Axel'),body)
 
 
 if __name__=='__main__':unittest.main()
