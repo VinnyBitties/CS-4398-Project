@@ -7,7 +7,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+import joblib
+
 from config import DEFAULT_MALICIOUS_THRESHOLD
+from model_utils import reports_to_matrix
 from report_parser import analyze_report, load_report
 
 
@@ -33,6 +36,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default=DEFAULT_MALICIOUS_THRESHOLD,
         help="Risk threshold used to label a report as malicious.",
     )
+    parser.add_argument("--classifier-model", help="Random Forest .joblib model to use for classification.")
+    parser.add_argument("--anomaly-model", help="Isolation Forest .joblib model to use for novelty detection.")
     return parser
 
 
@@ -46,7 +51,17 @@ def main() -> None:
 
     report = load_input_report(args.file)
     result = analyze_report(report, threshold=args.threshold)
-    print(json.dumps(result.to_dict(), indent=2))
+    output = result.to_dict()
+    features = reports_to_matrix([report])
+    if args.classifier_model:
+        classifier = joblib.load(args.classifier_model)
+        output["classifier_prediction"] = int(classifier.predict(features)[0])
+        output["classifier_probability"] = float(classifier.predict_proba(features)[0][1])
+    if args.anomaly_model:
+        detector = joblib.load(args.anomaly_model)
+        output["anomaly_prediction"] = "anomaly" if detector.predict(features)[0] == -1 else "known"
+        output["anomaly_score"] = float(detector.decision_function(features)[0])
+    print(json.dumps(output, indent=2))
 
 
 def load_input_report(file_path: str | None) -> dict[str, Any]:
