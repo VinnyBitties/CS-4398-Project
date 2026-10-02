@@ -1,0 +1,13 @@
+# Optional fast notification: this small workflow must exist on each component branch.
+# All analysis and issue writes happen in Contribution tracker on the default branch.
+name: Component branch changed
+on:
+  push:
+    branches-ignore: [main, master, 'CI/CD']
+permissions: {}
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - run: echo "Component branch push recorded."
