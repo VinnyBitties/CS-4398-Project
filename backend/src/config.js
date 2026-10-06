@@ -20,7 +20,7 @@ const config = {
     process.env.ANALYZER_SCRIPT_PATH || "./scripts/mock_analyze.py"
   ),
   uploadDir: resolveFromRoot(process.env.UPLOAD_DIR || "./uploads"),
-  databasePath: resolveFromRoot(process.env.DATABASE_PATH || "./data/sentinel.db"),
+  databasePath: process.env.DATABASE_PATH === ":memory:" ? ":memory:" : resolveFromRoot(process.env.DATABASE_PATH || "./data/sentinel.db"),
   maxUploadBytes: parseInt(process.env.MAX_UPLOAD_BYTES || "26214400", 10), // 25 MiB
   analyzerTimeoutMs: parseInt(process.env.ANALYZER_TIMEOUT_MS || "15000", 10),
   supportedSchemaVersions: ["1.0.0"],
