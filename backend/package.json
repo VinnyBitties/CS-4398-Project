@@ -1,0 +1,21 @@
+{
+  "name": "sentinel-backend",
+  "version": "0.1.0",
+  "description": "Coin Flip Defense (Sentinel) backend: REST API, database, and pipeline orchestration.",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1"
+  },
+  "devDependencies": {
+    "supertest": "^7.0.0"
+  }
+}

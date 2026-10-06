@@ -1,0 +1,108 @@
+# backend
+
+Sentinel's core REST API: accepts sample uploads, runs them through the analysis
+pipeline stages, stores scan history, and serves results to the dashboard. Scope
+per `Sentinel_Backend_Development_Documentation_Form.docx`: REST API, database,
+job queue/orchestration across signature → static ML → sandbox → behavioral ML →
+LLM stages, and operational configuration.
+
+## Why Node.js
+
+`malware_detection`'s `DEMO_AND_HANDOFF.md` originally specified a "Future
+Node.js integration (design only)" for calling into the Python static analyzer
+via `child_process.spawn`. That section was dropped in Kyle's later
+`dev-branch` rewrite, but the team confirmed (2026-09-29) Node.js is still the
+plan. This backend implements that design in `src/analyzer/runAnalyzer.js`.
+
+## Open coordination items
+
+- **Sandbox telemetry schema.** The team confirmed (2026-09-29) this project
+  uses a custom virtual sandbox, not Cuckoo Sandbox. The ML team's
+  `report_parser.py` (`ML-Axel` branch) is built specifically against Cuckoo's
+  JSON shape (`signatures`, `network`, `behavior.summary.*`). Since the custom
+  sandbox won't emit that exact format, someone needs to either make the
+  sandbox Cuckoo-compatible or update `report_parser.py`'s field mapping —
+  needs a conversation between Dynamic Analysis (Vincent, Jarrel), ML (Axel,
+  Diego), and backend before the behavioral-ML stage can be wired in for
+  real. `src/stages/httpStage.js` (below) is ready on the backend side either
+  way, since the HTTP-call pattern doesn't depend on the payload shape.
+- **Route naming.** `docs/component-plan.example.md` on `main` sketches
+  `POST /scans`; this implementation uses `POST /api/samples`. Confirm which
+  convention the frontend/dashboard expects before either becomes load-bearing.
+
+## Setup
+
+```bash
+cd backend
+npm install
+cp .env.example .env
+npm run dev     # starts on http://localhost:3000 by default
+```
+
+## Current status (what's implemented vs. stubbed)
+
+- `GET /api/health` — implemented.
+- `POST /api/samples` (multipart, field `file`) — implemented against a
+  **mock** analyzer (`scripts/mock_analyze.py`), which mimics
+  `analyze.py`'s I/O contract (`REPORT_CONTRACT.md`, schema `1.0.0`) closely
+  enough to develop and test the API without depending on the
+  `malware-detection` branch. Runs the file through the analyzer, computes
+  `sha256`, checks it against an in-memory signature list
+  (`src/signatures/knownHashes.js` — replace with a real YARA/hash catalog
+  per the Week 3 plan), and stores both in SQLite.
+- `GET /api/samples/:id` — implemented; returns a sample plus all its stage
+  results.
+- `POST /api/links` — **stubbed**, returns 501. Depends on Dynamic Analysis
+  extending the sandbox to render URLs (Week 8) before this can do anything
+  real.
+- Static ML, sandbox, behavioral ML, and LLM stages — **not started**. The
+  `results` table already has a `stage` column designed to hold each of
+  these as they come online, so wiring in a new stage means adding another
+  `results` row per sample, not a schema change.
+- Job queue — **not started**. Right now everything runs synchronously
+  inside the request handler, which is fine only while analysis is fast
+  (signature stage). Once the sandbox stage is wired in (which takes much
+  longer per Week 7/8), this needs to become async — a real queue (e.g.
+  BullMQ + Redis) or at minimum a background worker, so uploads don't hang
+  an HTTP request for minutes.
+- `src/stages/httpStage.js` — a **second integration pattern**, for a stage
+  exposed as a long-running HTTP service rather than a spawned CLI (matches
+  the ML team's `predict.py --serve`). Implemented and tested against a mock
+  HTTP server (`npm test` / `test/httpStage.test.js`, no deps required — runs
+  even before `npm install`), but not called from any route yet — blocked on
+  the sandbox telemetry schema question above.
+
+## Switching from the mock analyzer to the real one
+
+Once `malware-detection` is merged (or while developing against it locally),
+set in `.env`:
+
+```
+ANALYZER_SCRIPT_PATH=/absolute/path/to/malware_detection/analyze.py
+PYTHON_PATH=/absolute/path/to/malware_detection/.venv/Scripts/python.exe
+```
+
+`runAnalyzer.js` doesn't care which script it's pointed at as long as the
+script honors the same contract (JSON to stdout + exit 0 on success; JSON
+error to stderr + exit 1 on failure; `schema_version` field).
+
+## Tests
+
+```bash
+npm test
+```
+
+Runs against the mock analyzer and an in-memory SQLite database — no real
+PE files or network access needed.
+
+## Next steps (see the Week-by-Week Plan / Kickoff Checklist)
+
+1. Fill in the Backend Development Documentation Form as you go: API
+   Endpoint Record, Database Record, Decision Log (e.g. "why SQLite for
+   dev"), Testing and Verification.
+2. Swap the mock analyzer for the real one once `malware-detection` merges,
+   and confirm the Node.js integration design still holds for real PE
+   reports (larger `strings.sample` arrays, real `imports`, etc.).
+3. Replace the in-memory known-hash Set with a real signature source.
+4. Decide on the job-queue approach before the sandbox stage lands — that's
+   the point synchronous request handling breaks.
