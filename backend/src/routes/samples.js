@@ -7,9 +7,9 @@ const path = require("node:path");
 const fs = require("node:fs");
 
 const config = require("../config");
-const db = require("../db");
-const { runAnalyzer, AnalyzerError } = require("../analyzer/runAnalyzer");
-const { checkSignature } = require("../signatures/knownHashes");
+const store = require("../store/sampleStore");
+const { queue } = require("../queue/jobQueue");
+const { normalizeUrl } = require("../signatures/catalog");
 
 const router = express.Router();
 
@@ -28,98 +28,100 @@ const upload = multer({
   limits: { fileSize: config.maxUploadBytes },
 });
 
+function sha256OfFile(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash("sha256");
+    fs.createReadStream(filePath)
+      .on("error", reject)
+      .on("data", (chunk) => hash.update(chunk))
+      .on("end", () => resolve(hash.digest("hex")));
+  });
+}
+
+function wantsWait(req) {
+  return ["1", "true", "yes"].includes(String(req.query.wait || "").toLowerCase());
+}
+
+/**
+ * Shared tail of both submission routes: the sample and its job are already
+ * in the database; hand the job to the queue and answer.
+ *
+ *   default      -> 202 Accepted straight away; poll GET /api/samples/:id
+ *   ?wait=true   -> hold the request until the scan finishes -> 201 Created,
+ *                   or 202 if it is still running after WAIT_TIMEOUT_MS
+ */
+async function respondWithSubmission(req, res, { sampleId, jobId }) {
+  queue.enqueue();
+  const finished = wantsWait(req) ? await queue.waitFor(jobId) : false;
+  res.location(`/api/samples/${sampleId}`);
+  return res.status(finished ? 201 : 202).json(store.getSampleView(sampleId));
+}
+
 // POST /api/samples  (multipart/form-data, field name: "file")
-//
-// Week 3 benchmark: "An uploaded file ... produces a hash + signature-match
-// result that is correctly stored in the database."
-router.post("/samples", upload.single("file"), async (req, res) => {
+router.post("/samples", upload.single("file"), async (req, res, next) => {
   if (!req.file) {
     return res.status(400).json({ error: "missing_file", message: "Upload a file under field name 'file'." });
   }
-
-  const insertSample = db.prepare(`
-    INSERT INTO samples (sha256, submission_type, original_filename, file_size)
-    VALUES (?, 'file', ?, ?)
-  `);
-  const insertResult = db.prepare(`
-    INSERT INTO results (sample_id, stage, status, signature_match, report_json, error_message)
-    VALUES (?, 'signature', ?, ?, ?, ?)
-  `);
-
   try {
-    const report = await runAnalyzer(req.file.path);
-    const signatureMatch = checkSignature(report.sha256);
-
-    // Placeholder sha256/original_filename get overwritten with the
-    // analyzer's own values so the DB reflects what was actually hashed.
-    const sampleInfo = insertSample.run(report.sha256, req.file.originalname, req.file.size);
-    insertResult.run(sampleInfo.lastInsertRowid, "complete", signatureMatch ? 1 : 0, JSON.stringify(report), null);
-
-    return res.status(201).json({
-      sample_id: sampleInfo.lastInsertRowid,
-      sha256: report.sha256,
-      signature_match: signatureMatch,
-      analyzer_report: report,
+    // Hashed here, not taken from the analyzer, so the hash and the
+    // signature lookup never depend on a Python process being healthy.
+    const sha256 = await sha256OfFile(req.file.path);
+    const ids = store.createFileSample({
+      sha256,
+      originalFilename: req.file.originalname,
+      fileSize: req.file.size,
+      storedPath: req.file.path,
     });
+    return await respondWithSubmission(req, res, ids);
   } catch (err) {
-    // Still record the attempt so failures show up in scan history, per the
-    // Database Record's "operational configuration" scope in the backend
-    // documentation form.
-    const sampleInfo = insertSample.run("unknown", req.file.originalname, req.file.size);
-    insertResult.run(
-      sampleInfo.lastInsertRowid,
-      "failed",
-      null,
-      null,
-      err instanceof AnalyzerError ? JSON.stringify(err.details || {}) : null
-    );
-
-    if (err instanceof AnalyzerError) {
-      const statusByCode = {
-        INPUT_NOT_FOUND: 400,
-        BAD_JSON: 502,
-        UNSUPPORTED_SCHEMA: 502,
-        NONZERO_EXIT: 422, // most likely: not a valid PE file
-        TIMEOUT: 504,
-        LAUNCH_FAILED: 500,
-      };
-      const status = statusByCode[err.code] || 500;
-      return res.status(status).json({ error: err.code, message: err.message, sample_id: sampleInfo.lastInsertRowid });
-    }
-
-    req.log?.error?.(err);
-    return res.status(500).json({ error: "internal_error", message: "Unexpected server error." });
+    return next(err);
   }
+});
+
+// POST /api/links  (application/json: { "url": "https://..." })
+//
+// The backend never fetches the submitted URL: requesting an attacker-chosen
+// address from the server is an SSRF hole, and the page may be live malware.
+// Visiting the link is the sandbox's job (Week 8). Until then a link gets
+// the one stage that needs no network: the signature lookup.
+router.post("/links", async (req, res, next) => {
+  const raw = req.body && typeof req.body.url === "string" ? req.body.url.trim() : "";
+  if (!raw) {
+    return res.status(400).json({ error: "missing_url", message: 'Send JSON like {"url": "https://example.com/"}.' });
+  }
+  if (raw.length > config.maxUrlLength) {
+    return res.status(400).json({ error: "url_too_long", message: `URLs are limited to ${config.maxUrlLength} characters.` });
+  }
+  let url;
+  try {
+    const parsed = new URL(raw);
+    if (!["http:", "https:"].includes(parsed.protocol) || !parsed.hostname) throw new Error("unsupported");
+    url = normalizeUrl(raw);
+  } catch (_) {
+    return res.status(400).json({ error: "invalid_url", message: "Only absolute http:// and https:// URLs are accepted." });
+  }
+  try {
+    const sha256 = crypto.createHash("sha256").update(url).digest("hex");
+    return await respondWithSubmission(req, res, store.createLinkSample({ sha256, url }));
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// GET /api/samples?limit=20&offset=0  -- scan history, newest first (FR08)
+router.get("/samples", (req, res) => {
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+  const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+  return res.json(store.listSampleViews({ limit, offset }));
 });
 
 // GET /api/samples/:id
 router.get("/samples/:id", (req, res) => {
-  const sample = db.prepare("SELECT * FROM samples WHERE id = ?").get(req.params.id);
-  if (!sample) {
+  const view = /^\d+$/.test(req.params.id) ? store.getSampleView(Number(req.params.id)) : null;
+  if (!view) {
     return res.status(404).json({ error: "not_found" });
   }
-  const results = db.prepare("SELECT * FROM results WHERE sample_id = ? ORDER BY created_at").all(sample.id);
-  return res.json({
-    ...sample,
-    results: results.map((r) => ({
-      ...r,
-      signature_match: r.signature_match === null ? null : Boolean(r.signature_match),
-      report: r.report_json ? JSON.parse(r.report_json) : null,
-    })),
-  });
-});
-
-// POST /api/links  -- not implemented yet.
-//
-// Week 3/8 plan extends ingestion and the sandbox to accept links too, but
-// that depends on Dynamic Analysis extending the sandbox harness to render
-// URLs (Week 8). Stubbed here so the route exists and fails loudly instead
-// of silently, rather than half-implemented.
-router.post("/links", (req, res) => {
-  res.status(501).json({
-    error: "not_implemented",
-    message: "Link analysis depends on the Week 8 sandbox extension; not wired up yet.",
-  });
+  return res.json(view);
 });
 
 module.exports = router;
