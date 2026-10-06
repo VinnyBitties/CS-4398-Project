@@ -1,0 +1,20 @@
+{
+  "filename": "example.exe",
+  "sha256": "sample_hash_for_development",
+  "static_analysis": {
+    "suspicious_strings": [
+      "powershell.exe",
+      "cmd.exe"
+    ]
+  },
+  "ml_analysis": {
+    "classification": "malicious",
+    "confidence": 0.91
+  },
+  "dynamic_analysis": {
+    "network_activity": true,
+    "processes_created": [
+      "powershell.exe"
+    ]
+  }
+}
