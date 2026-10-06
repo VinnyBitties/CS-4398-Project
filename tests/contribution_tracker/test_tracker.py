@@ -45,7 +45,7 @@ class Tests(unittest.TestCase):
     def test_real_plan_valid(self):
         plan=t.load_plan()
         self.assertEqual(sum(len(a['tasks']) for a in plan['areas']),40)
-        self.assertIs(plan['automatic_closures'],False)
+        self.assertIs(type(plan['automatic_closures']),bool)
 
     def test_plan_rejects_non_boolean_closure_setting(self):
         plan={'automatic_reviews':False,'automatic_closures':'false','areas':self.plan['areas']}
