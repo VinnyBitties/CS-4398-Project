@@ -8,7 +8,7 @@ LLM stages, and operational configuration.
 
 ## Why Node.js
 
-`malware_detection`'s `DEMO_AND_HANDOFF.md` originally specified a "Future
+`malware_detection`'s handoff document originally specified a "Future
 Node.js integration (design only)" for calling into the Python static analyzer
 via `child_process.spawn`. That section was dropped in Kyle's later
 `dev-branch` rewrite, but the team confirmed (2026-09-29) Node.js is still the
@@ -68,8 +68,10 @@ The dashboard-facing contract for everything below is in
   Two are wired in:
   - `signature` — looks the hash (or URL/domain) up in the catalog.
   - `static_analysis` — runs the static analyzer as a subprocess. Still the
-    **mock** (`scripts/mock_analyze.py`), which mimics `analyze.py`'s I/O
-    contract (`REPORT_CONTRACT.md`, schema `1.0.0`).
+    **mock** (`scripts/mock_analyze.py`) by default, which mimics
+    `analyze.py`'s I/O contract (`malware_detection/REPORT_CONTRACT.md`,
+    schema `1.2.0`). The real analyzer works too and is one `.env` line
+    away; see below.
 
   A stage that fails is recorded as failed and the rest still run. Static
   ML, sandbox, behavioral ML and LLM stages are **not wired in**; adding one
@@ -96,17 +98,27 @@ curl "http://localhost:3000/api/samples"
 
 ## Switching from the mock analyzer to the real one
 
-Once `malware-detection` is merged (or while developing against it locally),
-set in `.env`:
+The real analyzer is in this repo at `malware_detection/analyze.py` (merged to
+`main` on 2026-10-06). The backend still defaults to the mock so that
+`npm run dev` works with nothing but Node and Python installed. To use the
+real one, install its one dependency and point `.env` at it:
+
+```bash
+pip install -r ../malware_detection/requirements.txt
+```
 
 ```
-ANALYZER_SCRIPT_PATH=/absolute/path/to/malware_detection/analyze.py
-PYTHON_PATH=/absolute/path/to/malware_detection/.venv/Scripts/python.exe
+ANALYZER_SCRIPT_PATH=../malware_detection/analyze.py
 ```
 
-`runAnalyzer.js` doesn't care which script it's pointed at as long as the
-script honors the same contract (JSON to stdout + exit 0 on success; JSON
-error to stderr + exit 1 on failure; `schema_version` field).
+If `pefile` lives in a virtual environment, set `PYTHON_PATH` to that
+environment's interpreter.
+
+The backend accepts analyzer contract versions `1.0.0` to `1.2.0`
+(`supportedSchemaVersions` in `src/config.js`); the real analyzer emits
+`1.2.0`. A file that is not a valid PE makes the analyzer exit 1, which shows
+up as a failed `static_analysis` stage carrying the analyzer's own reason
+(for example `PEFormatError`), not as a failed scan.
 
 ## Tests
 
@@ -114,16 +126,19 @@ error to stderr + exit 1 on failure; `schema_version` field).
 npm test
 ```
 
-27 tests across four files: the API end to end (`samples.test.js`), the job
-queue (`jobQueue.test.js`), the signature catalog (`catalog.test.js`) and the
-HTTP stage runner (`httpStage.test.js`). They run against the mock analyzer
-and an in-memory SQLite database — no real PE files or network access needed.
+29 tests across five files: the API end to end (`samples.test.js`), the job
+queue (`jobQueue.test.js`), the signature catalog (`catalog.test.js`), the
+HTTP stage runner (`httpStage.test.js`) and the real analyzer
+(`realAnalyzer.test.js`). All but the last run against the mock analyzer and
+an in-memory SQLite database, with no network access. The two real-analyzer
+tests are skipped unless `pefile` is installed for `python3`; they build an
+inert PE with the analyzer's own test helper, so no binary is committed.
 
 ## Next steps
 
-1. Swap the mock analyzer for the real one once `malware-detection` merges,
-   and confirm the integration holds for real PE reports (larger
-   `strings.sample` arrays, real `imports`, etc.).
+1. Try the real analyzer against real Windows executables (so far it has
+   only been run on the analyzer's small synthetic test PE), then decide
+   whether it should become the default.
 2. Agree the API contract with the dashboard (`docs/api-contract.md`, "Open
    questions"), starting with route names.
 3. Settle the sandbox telemetry schema, then add the `sandbox` and

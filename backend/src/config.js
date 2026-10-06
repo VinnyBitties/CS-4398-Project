@@ -23,7 +23,12 @@ const config = {
   databasePath: process.env.DATABASE_PATH === ":memory:" ? ":memory:" : resolveFromRoot(process.env.DATABASE_PATH || "./data/sentinel.db"),
   maxUploadBytes: parseInt(process.env.MAX_UPLOAD_BYTES || "26214400", 10), // 25 MiB
   analyzerTimeoutMs: parseInt(process.env.ANALYZER_TIMEOUT_MS || "15000", 10),
-  supportedSchemaVersions: ["1.0.0"],
+  // Analyzer report contract versions (malware_detection/REPORT_CONTRACT.md)
+  // this backend accepts. The backend stores the report and passes it to the
+  // dashboard without reading inside it, so the additive 1.1.0 and 1.2.0
+  // releases are safe to accept. A new major version must be added here on
+  // purpose, after checking what changed.
+  supportedSchemaVersions: ["1.0.0", "1.1.0", "1.2.0"],
 
   // Job queue (src/queue/jobQueue.js). Scans run in the background; this is
   // how many run at once, and how long `?wait=true` holds a request open

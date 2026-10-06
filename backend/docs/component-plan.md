@@ -43,10 +43,12 @@ queue, pipeline orchestration, and historical scan records (FR01, FR02, FR08).
 
 ## Dependencies and acceptance details
 
-- **Static analysis (Kyle, `dev-branch`):** `runAnalyzer.js` implements the
-  documented Node.js `child_process.spawn` integration and is tested against
-  `scripts/mock_analyze.py` (a contract-compatible stand-in). Swap in the real
-  `malware_detection/analyze.py` once that branch merges.
+- **Static analysis (Kyle, `malware_detection/`):** merged to `main` on
+  2026-10-06. `runAnalyzer.js` runs it as a subprocess and accepts report
+  contract versions 1.0.0 to 1.2.0. Verified end to end against the real
+  `analyze.py` with a synthetic PE (`test/realAnalyzer.test.js`); the default
+  configuration still points at `scripts/mock_analyze.py` so the backend
+  runs without `pefile`.
 - **Signature lookup (FR02):** `src/signatures/catalog.js` loads
   `signatures/catalog.json` plus an optional bulk hash list. The committed
   catalog holds only antivirus test artifacts; choosing a real feed (and any
@@ -73,4 +75,4 @@ preferred convention over `/samples`.
 ## Completion
 
 Status: active. Not ready for `Status: final` -- static ML, behavioral ML, and
-LLM stages are unimplemented, and the static analyzer is still the mock.
+LLM stages are unimplemented.

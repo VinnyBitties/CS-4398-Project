@@ -1,6 +1,6 @@
 # Sentinel backend API contract (draft for the dashboard)
 
-Status: **draft v0.2, not yet agreed with frontend.** Everything below is
+Status: **draft v0.3, not yet agreed with frontend.** Everything below is
 implemented and tested on `backend-Dhrubo`; what is still open is listed under
 "Open questions" at the end. Until those are settled, treat field names as
 stable and route names as provisional.
@@ -55,7 +55,7 @@ Each `results[]` entry:
 | `stage` | Runs for | Status | `report` shape |
 |---|---|---|---|
 | `signature` | files, links | **Live** | `{ matched, checked: "sha256"\|"url", match: { type, name, severity, source } \| null }` |
-| `static_analysis` | files | **Live against a mock analyzer** | The static analyzer's report, `schema_version` `1.0.0` (`REPORT_CONTRACT.md`). PE fields are canned values until the real `analyze.py` is plugged in. |
+| `static_analysis` | files | **Live** (mock analyzer by default, real one by configuration) | The static analyzer's report, `schema_version` `1.2.0`, defined field by field in `malware_detection/REPORT_CONTRACT.md`. With the default mock, the PE fields are canned values. This is extracted evidence, not a verdict. |
 | `static_ml` | files | Planned | To be defined with ML. |
 | `sandbox` | files, links | Planned | Blocked on the sandbox telemetry schema. |
 | `behavioral_ml` | files, links | Planned | Depends on `sandbox`. |
@@ -142,7 +142,7 @@ the sandbox stage once that exists.
                              "source": "EICAR standard antivirus test file (68 bytes)" } },
       "error": null, "created_at": "2026-10-06T23:02:13.205Z" },
     { "stage": "static_analysis", "status": "complete", "signature_match": null,
-      "report": { "schema_version": "1.0.0", "...": "see REPORT_CONTRACT.md" },
+      "report": { "schema_version": "1.2.0", "...": "see malware_detection/REPORT_CONTRACT.md" },
       "error": null, "created_at": "2026-10-06T23:02:13.207Z" }
   ]
 }
@@ -174,7 +174,9 @@ Branch on `error`, display `message`.
 
 A stage failing is **not** an HTTP error: the scan still returns 200/201, and
 the failure is in that stage's `results[].error`. Stage error codes so far,
-all from `static_analysis`: `NONZERO_EXIT` (most often: not a valid PE file),
+all from `static_analysis`: `NONZERO_EXIT` (most often: not a valid PE file;
+`error.details.analyzer_error` then holds the analyzer's own
+`{ error, message }`, e.g. `PEFormatError`),
 `TIMEOUT`, `BAD_JSON`, `UNSUPPORTED_SCHEMA`, `LAUNCH_FAILED`,
 `INPUT_NOT_FOUND`.
 
