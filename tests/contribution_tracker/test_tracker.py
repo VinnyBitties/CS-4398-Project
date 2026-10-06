@@ -98,6 +98,9 @@ class Tests(unittest.TestCase):
             with patch.object(t,'api',return_value=response) as request:
                 self.assertEqual(t.ask_gemini(self.context),self.report)
         self.assertIn('/models/gemini-3.8-flash:generateContent',request.call_args.args[0])
+        generation=request.call_args.args[2]['generationConfig']
+        self.assertEqual(generation['thinkingConfig'],{'thinkingLevel':'low'})
+        self.assertEqual(request.call_args.kwargs['timeout'],180)
 
     def test_complete_with_current_evidence_is_valid(self):
         self.report['tasks'][0].update(assessment='complete',

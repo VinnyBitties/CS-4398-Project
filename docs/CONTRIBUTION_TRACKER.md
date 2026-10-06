@@ -121,7 +121,8 @@ exists on main, test locally as above; the newly added Run workflow button may n
 Validation still runs on pushes to CI/CD and PRs into main without keys or issue writes.
 An explicit local --repo is optional for this project. The Actions repository variable
 GEMINI_MODEL can select another available model without a code change; the fallback is
-gemini-3.8-flash. Retain your existing repository API-key secret.
+gemini-3.8-flash. Gemini uses low thinking for this latency-sensitive classification and
+has a 180-second response timeout. Retain your existing repository API-key secret.
 
 ## Current issue behavior
 

@@ -15,10 +15,10 @@ from urllib.request import Request, urlopen
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def api(url, headers, data=None, method=None):
+def api(url, headers, data=None, method=None, timeout=90):
     req = Request(url, data=None if data is None else json.dumps(data).encode(),
                   headers={**headers, 'Content-Type': 'application/json'}, method=method)
-    with urlopen(req, timeout=90) as response:
+    with urlopen(req, timeout=timeout) as response:
         body = response.read()
     return json.loads(body) if body else None
 
@@ -230,7 +230,8 @@ three scoped follow-ups. Keep evidence and next_step each under 60 words. No HTM
                    {'x-goog-api-key': os.environ['GEMINI_API_KEY']},
                    {'systemInstruction': {'parts': [{'text': prompt}]},
                     'contents': [{'parts': [{'text': json.dumps(context)}]}],
-                    'generationConfig': {'responseMimeType': 'application/json', 'maxOutputTokens': 8192}})
+                    'generationConfig': {'responseMimeType': 'application/json', 'maxOutputTokens': 8192,
+                                         'thinkingConfig': {'thinkingLevel': 'low'}}}, timeout=180)
     c = response.get('candidates', [{}])[0]
     if c.get('finishReason') != 'STOP':
         raise ValueError('Incomplete/blocked Gemini response; no update published.')
