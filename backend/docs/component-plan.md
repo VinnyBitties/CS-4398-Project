@@ -15,10 +15,10 @@ queue, pipeline orchestration, and historical scan records (FR01, FR02, FR08).
       and returning a sample ID. (Named `/api/samples`, not `/scans` -- confirm
       with the team whether the dashboard/frontend contract expects a specific
       route name before this is load-bearing.)
-- [ ] [backend-02] Create queued/running/completed/failed job states and a worker
-      interface. Currently only synchronous request-handling exists (signature
-      stage only, which is fast); this becomes required once the sandbox stage
-      (much slower) is wired in.
+- [x] [backend-02] Create queued/running/completed/failed job states and a worker
+      interface. `src/queue/jobQueue.js` runs scans in the background off a
+      SQLite `jobs` table; `src/pipeline/stages.js` is the worker interface a
+      new stage plugs into. Uploads return `202` and are polled.
 - [x] [backend-03] Persist sample ID, filename, hash, and per-stage results
       (`samples` + `results` tables, SQLite for dev). Telemetry reference and
       full report storage exist as a generic `report_json` column per stage.
@@ -31,9 +31,15 @@ queue, pipeline orchestration, and historical scan records (FR01, FR02, FR08).
       Dependencies below).
 - [ ] [backend-06] Wire the LLM threat-analysis stage (FR06) into the pipeline.
       Not started; no LLM/Threat Intel branch exists yet as of this writing.
+- [x] [backend-08] Accept link/URL submissions (professor feedback, suggestion
+      4). `POST /api/links` validates, stores and signature-checks a URL
+      without fetching it. Rendering the page is the sandbox stage's job.
+- [x] [backend-09] Scan history listing (FR08): `GET /api/samples` with paging.
 - [x] [backend-07] Validate upload type and return useful errors for unsupported
       files. `POST /api/samples` returns structured error codes
-      (`INPUT_NOT_FOUND`, `NONZERO_EXIT`, `TIMEOUT`, etc.) rather than a bare 500.
+      (`missing_file`, `upload_rejected`, ...) rather than a bare 500; analyzer
+      failures (`NONZERO_EXIT`, `TIMEOUT`, etc.) are recorded on the
+      `static_analysis` stage result.
 
 ## Dependencies and acceptance details
 
@@ -41,9 +47,10 @@ queue, pipeline orchestration, and historical scan records (FR01, FR02, FR08).
   documented Node.js `child_process.spawn` integration and is tested against
   `scripts/mock_analyze.py` (a contract-compatible stand-in). Swap in the real
   `malware_detection/analyze.py` once that branch merges.
-- **Signature lookup (FR02):** starter in-memory hash list in
-  `src/signatures/knownHashes.js` -- replace with a real catalog/YARA source
-  per the Week 3 plan.
+- **Signature lookup (FR02):** `src/signatures/catalog.js` loads
+  `signatures/catalog.json` plus an optional bulk hash list. The committed
+  catalog holds only antivirus test artifacts; choosing a real feed (and any
+  YARA source, per the Week 3 plan) is still open.
 - **Sandbox telemetry schema -- open coordination item:** the team confirmed
   (2026-09-29) this project uses a custom virtual sandbox, not Cuckoo Sandbox.
   The ML team's existing `report_parser.py` (`ML-Axel` branch) is built
@@ -51,20 +58,19 @@ queue, pipeline orchestration, and historical scan records (FR01, FR02, FR08).
   `behavior.summary.num_processes_created`, etc.). Since the sandbox won't
   produce Cuckoo's exact format, either the sandbox needs to emit
   Cuckoo-compatible JSON, or `report_parser.py`'s field mapping needs to be
-  updated to match whatever schema the sandbox team (Vincent, Jarrel) settles
-  on. Backend can't finalize the behavioral-ML wiring until this is resolved
+  updated to match whatever schema the sandbox team settles on. Backend can't finalize the behavioral-ML wiring until this is resolved
   -- needs a three-way conversation between Dynamic Analysis, ML, and Backend.
-- **Dashboard endpoints:** depend on the frontend/API contract (Sebastian's
-  `website` branch). Not yet coordinated on exact response shape beyond what's
-  in `GET /api/samples/:id`.
+- **Dashboard endpoints:** drafted in `docs/api-contract.md`, not yet agreed
+  with the frontend (Sebastian's `website` branch). Its "Open questions"
+  section lists what needs a decision, starting with route names.
 
 ## Future additions to consider
 
-Pagination for scan history; a real job queue (BullMQ + Redis, or similar)
-once stage latency requires it; a route naming pass if `/scans` is the team's
+A broker-backed job queue (BullMQ + Redis, or similar) if the backend ever
+runs as more than one process; authentication and CORS; a route naming pass if `/scans` is the team's
 preferred convention over `/samples`.
 
 ## Completion
 
 Status: active. Not ready for `Status: final` -- static ML, behavioral ML, and
-LLM stages are unimplemented, and the job queue doesn't exist yet.
+LLM stages are unimplemented, and the static analyzer is still the mock.
