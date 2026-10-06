@@ -1,5 +1,8 @@
 import importlib.util
+import json
+import os
 from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -42,6 +45,17 @@ class Tests(unittest.TestCase):
     def test_real_plan_valid(self):
         plan=t.load_plan()
         self.assertEqual(sum(len(a['tasks']) for a in plan['areas']),40)
+        self.assertIs(plan['automatic_closures'],False)
+
+    def test_plan_rejects_non_boolean_closure_setting(self):
+        plan={'automatic_reviews':False,'automatic_closures':'false','areas':self.plan['areas']}
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            (root/'.github').mkdir()
+            (root/'.github/issue-plan.json').write_text(json.dumps(plan))
+            with patch.object(t,'ROOT',root):
+                with self.assertRaises(ValueError):
+                    t.load_plan()
 
     def test_dry_seed_no_writes(self):
         gh=FakeGitHub()
@@ -77,6 +91,28 @@ class Tests(unittest.TestCase):
     def test_valid_report(self):
         t.validate(self.report,self.context)
 
+    def test_default_model_uses_current_flash(self):
+        response={'candidates':[{'finishReason':'STOP','content':{'parts':[{
+            'text':json.dumps(self.report)}]}}]}
+        with patch.dict(os.environ,{'GEMINI_API_KEY':'test-key'},clear=True):
+            with patch.object(t,'api',return_value=response) as request:
+                self.assertEqual(t.ask_gemini(self.context),self.report)
+        self.assertIn('/models/gemini-3.8-flash:generateContent',request.call_args.args[0])
+
+    def test_complete_with_current_evidence_is_valid(self):
+        self.report['tasks'][0].update(assessment='complete',
+                                       evidence='model.py records every required evaluation metric.',
+                                       next_step='Close the task.')
+        t.validate(self.report,self.context)
+
+    def test_complete_rejects_inherited_only_evidence(self):
+        self.context['previous_report']={'tasks':[{'id':'ml-01','paths':['old_model.py']}]}
+        self.report['tasks'][0].update(assessment='complete',
+                                       evidence='Previously reported implementation.',
+                                       paths=['old_model.py'],next_step='Close the task.')
+        with self.assertRaises(ValueError):
+            t.validate(self.report,self.context)
+
     def test_unknown_task_rejected(self):
         self.report['tasks'][0]['id']='made-up'
         with self.assertRaises(ValueError):t.validate(self.report,self.context)
@@ -95,6 +131,7 @@ class Tests(unittest.TestCase):
         body=t.render(self.report,self.context)
         self.assertIn('Unassigned',body)
         self.assertIn('1 omitted',body)
+        self.assertIn('may close mapped subissues',body)
         self.assertIn(t.branch_marker('ML-Axel'),body)
 
 
