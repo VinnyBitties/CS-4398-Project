@@ -1,0 +1,334 @@
+{
+  "automatic_reviews": false,
+  "areas": [
+    {
+      "id": "sandbox",
+      "title": "Dynamic analysis and sandbox",
+      "owners": "Vincent and Jarrel",
+      "branches": [
+        "sandbox/telemetry---vinny-&-Joaquin"
+      ],
+      "goal": "Run unknown Windows executables in an isolated, restorable environment and supply usable runtime telemetry.",
+      "done_when": "Agreed subissues are complete and the component owner confirms integration and verification.",
+      "tasks": [
+        {
+          "id": "sandbox-01",
+          "title": "Set up the sandbox environment",
+          "goal": "Document a repeatable isolated VM setup and its operating assumptions.",
+          "done_when": "Document a repeatable isolated VM setup and its operating assumptions."
+        },
+        {
+          "id": "sandbox-02",
+          "title": "Manage execution and restoration",
+          "goal": "Provide a controlled sample execution flow and restore a clean snapshot between runs.",
+          "done_when": "Provide a controlled sample execution flow and restore a clean snapshot between runs."
+        },
+        {
+          "id": "sandbox-03",
+          "title": "Capture runtime activity",
+          "goal": "Collect process, registry, filesystem, network-request, and API activity needed by the pipeline.",
+          "done_when": "Collect process, registry, filesystem, network-request, and API activity needed by the pipeline."
+        },
+        {
+          "id": "sandbox-04",
+          "title": "Export sandbox results",
+          "goal": "Provide documented structured logs that the behavioral ML and backend teams can consume.",
+          "done_when": "Provide documented structured logs that the behavioral ML and backend teams can consume."
+        },
+        {
+          "id": "sandbox-05",
+          "title": "Validate and document sandbox operation",
+          "goal": "Record checks of isolation, restoration, failure handling, and telemetry completeness.",
+          "done_when": "Record checks of isolation, restoration, failure handling, and telemetry completeness."
+        }
+      ]
+    },
+    {
+      "id": "ml",
+      "title": "Machine learning",
+      "owners": "Axel P and Diego",
+      "branches": [
+        "ML-Axel",
+        "ML-Diego"
+      ],
+      "goal": "Provide static and behavioral classification plus reproducible evaluation of the detection layers.",
+      "done_when": "Agreed subissues are complete and the component owner confirms integration and verification.",
+      "tasks": [
+        {
+          "id": "ml-01",
+          "title": "Prepare datasets and evaluation splits",
+          "goal": "Document dataset preparation, labels, and train/validation/test splits, including withheld families.",
+          "done_when": "Document dataset preparation, labels, and train/validation/test splits, including withheld families."
+        },
+        {
+          "id": "ml-02",
+          "title": "Develop static classification",
+          "goal": "Build static feature processing, train a baseline classifier, and expose probability-score inference.",
+          "done_when": "Build static feature processing, train a baseline classifier, and expose probability-score inference."
+        },
+        {
+          "id": "ml-03",
+          "title": "Develop behavioral classification",
+          "goal": "Convert runtime logs into features and train/integrate a behavioral classifier.",
+          "done_when": "Convert runtime logs into features and train/integrate a behavioral classifier."
+        },
+        {
+          "id": "ml-04",
+          "title": "Explain model outputs",
+          "goal": "Provide feature-importance information and document how scores should be interpreted.",
+          "done_when": "Provide feature-importance information and document how scores should be interpreted."
+        },
+        {
+          "id": "ml-05",
+          "title": "Evaluate detection performance",
+          "goal": "Provide reproducible accuracy, precision, recall, F1, ROC-AUC, false-positive/negative, and layer-comparison results, including withheld-family evaluation.",
+          "done_when": "Provide reproducible accuracy, precision, recall, F1, ROC-AUC, false-positive/negative, and layer-comparison results, including withheld-family evaluation."
+        }
+      ]
+    },
+    {
+      "id": "llm",
+      "title": "LLM threat analysis",
+      "owners": "J.J",
+      "branches": [],
+      "goal": "Explain observed findings and provide supported MITRE ATT&CK mappings and recommendations.",
+      "done_when": "Agreed subissues are complete and the component owner confirms integration and verification.",
+      "tasks": [
+        {
+          "id": "llm-01",
+          "title": "Define report inputs and outputs",
+          "goal": "Agree on the telemetry/model fields consumed and the report structure produced.",
+          "done_when": "Agree on the telemetry/model fields consumed and the report structure produced."
+        },
+        {
+          "id": "llm-02",
+          "title": "Generate evidence-grounded explanations",
+          "goal": "Produce readable explanations tied to supplied observations rather than unsupported claims.",
+          "done_when": "Produce readable explanations tied to supplied observations rather than unsupported claims."
+        },
+        {
+          "id": "llm-03",
+          "title": "Map findings to MITRE ATT&CK",
+          "goal": "Associate supported observations with appropriate tactics/techniques and make uncertainty visible.",
+          "done_when": "Associate supported observations with appropriate tactics/techniques and make uncertainty visible."
+        },
+        {
+          "id": "llm-04",
+          "title": "Provide recommendations",
+          "goal": "Generate appropriate mitigation summaries based on the findings without implementing automatic remediation.",
+          "done_when": "Generate appropriate mitigation summaries based on the findings without implementing automatic remediation."
+        },
+        {
+          "id": "llm-05",
+          "title": "Integrate and evaluate report generation",
+          "goal": "Connect the API, handle missing inputs/API failures, and document example-report checks.",
+          "done_when": "Connect the API, handle missing inputs/API failures, and document example-report checks."
+        }
+      ]
+    },
+    {
+      "id": "backend",
+      "title": "Backend services and orchestration",
+      "owners": "D.G",
+      "branches": [
+        "backend-Dhrubo"
+      ],
+      "goal": "Accept submissions, coordinate analysis jobs, and expose stored results to the dashboard.",
+      "done_when": "Agreed subissues are complete and the component owner confirms integration and verification.",
+      "tasks": [
+        {
+          "id": "backend-01",
+          "title": "Accept analysis submissions",
+          "goal": "Provide a documented executable-upload API with useful validation/error responses.",
+          "done_when": "Provide a documented executable-upload API with useful validation/error responses."
+        },
+        {
+          "id": "backend-02",
+          "title": "Manage analysis jobs",
+          "goal": "Track job lifecycle and coordinate the analysis stages and their failures.",
+          "done_when": "Track job lifecycle and coordinate the analysis stages and their failures."
+        },
+        {
+          "id": "backend-03",
+          "title": "Store scan records",
+          "goal": "Persist the scan information required for results, history, and evaluation.",
+          "done_when": "Persist the scan information required for results, history, and evaluation."
+        },
+        {
+          "id": "backend-04",
+          "title": "Expose results and history",
+          "goal": "Provide documented endpoints for scan status, findings, reports, and previous scans.",
+          "done_when": "Provide documented endpoints for scan status, findings, reports, and previous scans."
+        },
+        {
+          "id": "backend-05",
+          "title": "Test backend integrations",
+          "goal": "Add and run checks of service contracts, job failures, and the end-to-end backend flow.",
+          "done_when": "Add and run checks of service contracts, job failures, and the end-to-end backend flow."
+        }
+      ]
+    },
+    {
+      "id": "frontend",
+      "title": "Analyst dashboard",
+      "owners": "Sebastian",
+      "branches": [],
+      "goal": "Make submission, scores, observed behaviors, and explanations accessible in one interface.",
+      "done_when": "Agreed subissues are complete and the component owner confirms integration and verification.",
+      "tasks": [
+        {
+          "id": "frontend-01",
+          "title": "Build the submission workflow",
+          "goal": "Allow users to submit supported files and understand submission success or failure.",
+          "done_when": "Allow users to submit supported files and understand submission success or failure."
+        },
+        {
+          "id": "frontend-02",
+          "title": "Display analysis progress",
+          "goal": "Show pending, running, completed, and failed analysis states clearly.",
+          "done_when": "Show pending, running, completed, and failed analysis states clearly."
+        },
+        {
+          "id": "frontend-03",
+          "title": "Display findings and reports",
+          "goal": "Present detection scores, observed behavior, and LLM reports in an understandable way.",
+          "done_when": "Present detection scores, observed behavior, and LLM reports in an understandable way."
+        },
+        {
+          "id": "frontend-04",
+          "title": "Provide scan-history access",
+          "goal": "Let users find previous scans and open their results.",
+          "done_when": "Let users find previous scans and open their results."
+        },
+        {
+          "id": "frontend-05",
+          "title": "Test dashboard usability and integration",
+          "goal": "Check backend integration, empty/error/loading states, and usability for non-expert analysts.",
+          "done_when": "Check backend integration, empty/error/loading states, and usability for non-expert analysts."
+        }
+      ]
+    },
+    {
+      "id": "static",
+      "title": "Signature and static analysis",
+      "owners": "Kyle",
+      "branches": [],
+      "goal": "Produce signature matches and static executable features used by the rest of the pipeline.",
+      "done_when": "Agreed subissues are complete and the component owner confirms integration and verification.",
+      "tasks": [
+        {
+          "id": "static-01",
+          "title": "Implement hash-based identification",
+          "goal": "Compute SHA-256 values and support matching against known malicious signatures.",
+          "done_when": "Compute SHA-256 values and support matching against known malicious signatures."
+        },
+        {
+          "id": "static-02",
+          "title": "Integrate YARA scanning",
+          "goal": "Manage and apply YARA rules and return usable match information.",
+          "done_when": "Manage and apply YARA rules and return usable match information."
+        },
+        {
+          "id": "static-03",
+          "title": "Extract static executable features",
+          "goal": "Extract PE headers, section information/entropy, imports, and strings needed for analysis.",
+          "done_when": "Extract PE headers, section information/entropy, imports, and strings needed for analysis."
+        },
+        {
+          "id": "static-04",
+          "title": "Standardize static-analysis results",
+          "goal": "Agree on output fields and failure behavior with the ML and backend teams.",
+          "done_when": "Agree on output fields and failure behavior with the ML and backend teams."
+        },
+        {
+          "id": "static-05",
+          "title": "Test and document static analysis",
+          "goal": "Check representative valid/invalid inputs and document how to run and interpret the scanner.",
+          "done_when": "Check representative valid/invalid inputs and document how to run and interpret the scanner."
+        }
+      ]
+    },
+    {
+      "id": "documentation",
+      "title": "Documentation and development support",
+      "owners": "Cade",
+      "branches": [],
+      "goal": "Maintain useful project documentation and support scoped work across component branches.",
+      "done_when": "Agreed subissues are complete and the component owner confirms integration and verification.",
+      "tasks": [
+        {
+          "id": "documentation-01",
+          "title": "Maintain setup and architecture documentation",
+          "goal": "Keep current instructions for running the system and explain component responsibilities/interfaces.",
+          "done_when": "Keep current instructions for running the system and explain component responsibilities/interfaces."
+        },
+        {
+          "id": "documentation-02",
+          "title": "Track milestones and technical decisions",
+          "goal": "Record agreed milestones, changes, dependencies, and decisions without duplicating bot-generated summaries.",
+          "done_when": "Record agreed milestones, changes, dependencies, and decisions without duplicating bot-generated summaries."
+        },
+        {
+          "id": "documentation-03",
+          "title": "Coordinate verification records",
+          "goal": "Organize test plans, verification evidence, and results contributed by the component owners.",
+          "done_when": "Organize test plans, verification evidence, and results contributed by the component owners."
+        },
+        {
+          "id": "documentation-04",
+          "title": "Support agreed authentication work",
+          "goal": "Clarify the proposal's Gmail authentication/login scope, then implement the agreed portion with the backend owner.",
+          "done_when": "Clarify the proposal's Gmail authentication/login scope, then implement the agreed portion with the backend owner."
+        },
+        {
+          "id": "documentation-05",
+          "title": "Prepare final report and demonstration",
+          "goal": "Assemble documented methods, evaluation results, limitations, and a repeatable demonstration.",
+          "done_when": "Assemble documented methods, evaluation results, limitations, and a repeatable demonstration."
+        }
+      ]
+    },
+    {
+      "id": "integration",
+      "title": "Integration and contribution visibility",
+      "owners": "Shared; Cade can lead the proposed tracking automation",
+      "branches": [
+        "dev-branch"
+      ],
+      "goal": "Connect the components and help contributors identify available work. The automation below is a proposed development addition, not a product requirement in the proposal.",
+      "done_when": "Agreed subissues are complete and the component owner confirms integration and verification.",
+      "tasks": [
+        {
+          "id": "integration-01",
+          "title": "Agree on component interfaces",
+          "goal": "Document and reconcile data exchanged between analysis, backend, and dashboard components.",
+          "done_when": "Document and reconcile data exchanged between analysis, backend, and dashboard components."
+        },
+        {
+          "id": "integration-02",
+          "title": "Create the initial issue hierarchy",
+          "goal": "Seed the agreed parent issues and real subissues without duplicating them on repeated runs.",
+          "done_when": "Seed the agreed parent issues and real subissues without duplicating them on repeated runs."
+        },
+        {
+          "id": "integration-03",
+          "title": "Automate progress summaries",
+          "goal": "Use Gemini to compare relevant changes with task criteria and update a persistent progress summary.",
+          "done_when": "Use Gemini to compare relevant changes with task criteria and update a persistent progress summary."
+        },
+        {
+          "id": "integration-04",
+          "title": "Expose contributor opportunities",
+          "goal": "Show unassigned tasks, known dependencies, owner branch, and a concrete next step for helpers.",
+          "done_when": "Show unassigned tasks, known dependencies, owner branch, and a concrete next step for helpers."
+        },
+        {
+          "id": "integration-05",
+          "title": "Validate the integrated workflow",
+          "goal": "Exercise component handoffs and test the issue automation on a small example before enabling it broadly.",
+          "done_when": "Exercise component handoffs and test the issue automation on a small example before enabling it broadly."
+        }
+      ]
+    }
+  ]
+}
