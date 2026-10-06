@@ -12,7 +12,7 @@
  */
 const KNOWN_MALICIOUS_SHA256 = new Set([
   // EICAR test file's SHA-256 -- safe, standard antivirus test string.
-  "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0",
+  "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f",
 ]);
 
 function checkSignature(sha256) {
