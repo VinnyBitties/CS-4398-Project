@@ -61,7 +61,7 @@ test("POST /api/samples queues the scan and returns 202 before it has run", asyn
   assert.equal(done.body.signature_match, false);
   assert.equal(stage(done.body, "signature").status, "complete");
   assert.equal(stage(done.body, "static_analysis").status, "complete");
-  assert.equal(stage(done.body, "static_analysis").report.schema_version, "1.0.0");
+  assert.equal(stage(done.body, "static_analysis").report.schema_version, "1.2.0");
   assert.ok(done.body.job.started_at && done.body.job.finished_at);
 });
 
