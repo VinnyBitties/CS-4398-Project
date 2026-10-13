@@ -49,17 +49,31 @@ def load_plan():
     for setting in ('automatic_reviews', 'automatic_closures'):
         if not isinstance(plan.get(setting, False), bool):
             raise ValueError(setting + ' must be true or false.')
-    ids, branches = set(), set()
+    ids = set()
     for area in plan['areas']:
         for item in [area, *area['tasks']]:
             key = item['id']
             if not re.fullmatch(r'[a-z0-9-]+', key) or key in ids:
                 raise ValueError('Task IDs must be unique lowercase slugs: ' + key)
             ids.add(key)
-        for branch in area['branches']:
-            if branch in branches:
-                raise ValueError('Branch mapped to multiple parents: ' + branch)
-            branches.add(branch)
+        if (not isinstance(area.get('branches'), list)
+                or any(not isinstance(branch, str) or not branch for branch in area['branches'])
+                or len(set(area['branches'])) != len(area['branches'])):
+            raise ValueError('Area branches must be unique non-empty strings: ' + area['id'])
+        checks = area.get('required_checks', [])
+        if (not isinstance(checks, list)
+                or any(not isinstance(check, str) or not check for check in checks)
+                or len(set(checks)) != len(checks)):
+            raise ValueError('required_checks must be unique non-empty strings: ' + area['id'])
+        if any(check.casefold() in {'notify', 'component branch changed'} for check in checks):
+            raise ValueError('A notification job cannot be used as required_checks: ' + area['id'])
+        if plan.get('automatic_closures', False) and not checks:
+            raise ValueError('automatic closures require required_checks for area: ' + area['id'])
+        paths = area.get('paths', [])
+        if not isinstance(paths, list) or any(not isinstance(path, str) or not path for path in paths):
+            raise ValueError('Area paths must be non-empty strings: ' + area['id'])
+        if 'baseline' in area and not re.fullmatch(r'[0-9a-f]{40}', area['baseline']):
+            raise ValueError('Area baseline must be a full commit SHA: ' + area['id'])
     return plan
 
 
@@ -83,7 +97,7 @@ def issue_index(issues, plan):
 
 def issue_body(area, task=None):
     item = task or area
-    branches = ', '.join('`' + b + '`' for b in area['branches']) or 'Owner to confirm'
+    branches = branch_text(area)
     return (marker(item['id']) + '\n## Goal\n' + item['goal'] +
             '\n\n## Coordination\nComponent owner(s): ' + area['owners'] +
             '\nTarget branch(es): ' + branches +
@@ -91,6 +105,18 @@ def issue_body(area, task=None):
             '\n\n## Dependencies\nConfirm with the component owner before starting.\n'
             '\n## Contributor notes\nLeave unassigned if available; claim before starting. '
             'Use a helper branch and PR into the agreed component branch.\n')
+
+
+def branch_text(area):
+    return ', '.join('`' + branch + '`' for branch in area['branches']) or 'Owner to confirm'
+
+
+def sync_issue_branch(body, area):
+    updated, count = re.subn(r'^Target branch\(es\): .*$',
+                             'Target branch(es): ' + branch_text(area), body, flags=re.MULTILINE)
+    if count != 1:
+        raise ValueError('Tracked issue coordination line missing or duplicated: ' + area['id'])
+    return updated
 
 
 def seed(gh, plan, apply=False):
@@ -103,6 +129,18 @@ def seed(gh, plan, apply=False):
                 operations.append({'action': 'create_issue', 'id': item['id'], 'title': item['title'], 'body': body})
                 if apply:
                     existing[item['id']] = gh.call('/issues', {'title': item['title'], 'body': body}, 'POST')
+            else:
+                issue = existing[item['id']]
+                body = sync_issue_branch(issue.get('body') or '', area)
+                if body != issue.get('body'):
+                    operations.append({'action': 'update_issue_body', 'id': item['id'],
+                                       'number': issue['number'], 'body': body})
+                    if apply:
+                        fresh = gh.call(f'/issues/{issue["number"]}')
+                        if fresh.get('body') != issue.get('body'):
+                            raise ValueError('Tracked issue changed concurrently; retry.')
+                        gh.call(f'/issues/{issue["number"]}', {'body': body}, 'PATCH')
+                        issue['body'] = body
         parent = existing.get(area['id'])
         linked = {i['id'] for i in gh.pages(f'/issues/{parent["number"]}/sub_issues')} if parent else set()
         for task in area['tasks']:
@@ -138,16 +176,41 @@ def compare(gh, base, head):
     return result
 
 
+def check_runs(gh, sha):
+    checks = []
+    for page in range(1, 101):
+        payload = gh.call(f'/commits/{sha}/check-runs?per_page=100&page={page}')
+        checks.extend({
+            'id': c.get('id'), 'name': c['name'], 'status': c['status'],
+            'conclusion': c['conclusion'], 'url': c.get('html_url'),
+            'app': (c.get('app') or {}).get('slug'),
+            'check_suite_id': (c.get('check_suite') or {}).get('id'),
+            'external_id': c.get('external_id'),
+        } for c in payload['check_runs'])
+        if len(checks) >= payload['total_count']:
+            return checks
+    raise ValueError('Check pagination limit reached.')
+
+
 def collect(gh, branch, area, index, previous=None, full=False):
     sha = gh.call('/branches/' + quote(branch, safe=''))['commit']['sha']
     default = gh.call('')['default_branch']
-    baseline = compare(gh, default, sha)
-    merged = baseline['status'] in ('identical', 'behind')
+    containment = compare(gh, default, sha)
+    merged = containment['status'] in ('identical', 'behind')
     prior = checkpoint(previous)
     mode = 'first analysis from common ancestor'
-    base_sha = baseline['merge_base_commit']['sha']
-    changes = baseline
-    if prior and not full:
+    base_sha = containment['merge_base_commit']['sha']
+    changes = containment
+    configured_base = area.get('baseline')
+    if configured_base:
+        changes = compare(gh, configured_base, sha)
+        if changes['merge_base_commit']['sha'] != configured_base:
+            raise ValueError('Configured baseline is not an ancestor of the reviewed branch.')
+        base_sha = configured_base
+        mode = 'first analysis from configured baseline'
+    if prior and not full and prior['sha'] == sha:
+        mode = 'same commit refreshed from ' + ('configured baseline' if configured_base else 'common ancestor')
+    elif prior and not full:
         try:
             candidate = compare(gh, prior['sha'], sha)
         except HTTPError as error:
@@ -161,9 +224,16 @@ def collect(gh, branch, area, index, previous=None, full=False):
             mode = 'history rewritten; reassessing from common ancestor'
     elif full:
         prior = None
-        mode = 'full refresh from common ancestor'
+        mode = 'full refresh from ' + ('configured baseline' if configured_base else 'common ancestor')
+    prefixes = area.get('paths', [])
+    changed_files = changes.get('files', [])
+    if prefixes:
+        changed_files = [f for f in changed_files
+                         if any(f['filename'] == prefix.rstrip('/')
+                                or f['filename'].startswith(prefix.rstrip('/') + '/')
+                                for prefix in prefixes)]
     patches, omitted, budget = [], [], 80000
-    for f in changes.get('files', []):
+    for f in changed_files:
         path = f['filename']
         if any(s in path.lower() for s in ['.env', 'secret', 'credential', '.pem', '.key', 'package-lock', 'yarn.lock']):
             omitted.append(path)
@@ -174,15 +244,7 @@ def collect(gh, branch, area, index, previous=None, full=False):
             continue
         patches.append({'path': path, 'change': f['status'], 'patch': patch})
         budget -= len(patch)
-    checks = []
-    for page in range(1, 101):
-        payload = gh.call(f'/commits/{sha}/check-runs?per_page=100&page={page}')
-        checks.extend({'name': c['name'], 'status': c['status'], 'conclusion': c['conclusion'],
-                       'url': c.get('html_url')} for c in payload['check_runs'])
-        if len(checks) >= payload['total_count']:
-            break
-    else:
-        raise ValueError('Check pagination limit reached.')
+    checks = check_runs(gh, sha)
     tasks = []
     for task in area['tasks']:
         issue = index.get(task['id'])
@@ -192,6 +254,7 @@ def collect(gh, branch, area, index, previous=None, full=False):
                       'assignees': [u['login'] for u in issue.get('assignees', [])] if issue else []})
     context = {'overview': (ROOT / 'docs/project-overview.md').read_text(),
                'component': area['title'], 'tasks': tasks,
+               'required_checks': area.get('required_checks', []),
                'branch': {'name': branch, 'head_sha': sha, 'base_sha': base_sha,
                           'default_branch': default, 'contained_in_default': merged, 'comparison': mode},
                'diff': patches, 'omitted_paths': omitted, 'ci_checks': checks,
@@ -217,8 +280,9 @@ provided. Use previous_report for earlier evidence, but identify inherited claim
 previously reported and revise them if new changes remove or contradict that work.
 Use complete only when concrete code or documentation in the CURRENT comparison satisfies
 the task's done_when condition. Complete must cite at least one current diff path; never
-use previous reports alone. Merge containment and passing CI are not required for complete.
-Assess overall task progress, not just the latest patch. Previous AI output is not
+use previous reports alone. Merge containment and passing CI are not required for complete;
+the tracker applies its configured CI gate separately before automatic closure. Assess
+overall task progress, not just the latest patch. Previous AI output is not
 independent verification. With no previous report, never invent earlier evidence.
 The branch comparison tells whether its exact tip is contained in the default branch;
 that is ancestry evidence, not proof of approval or passing tests. A diff may be truncated by GitHub; never claim full codebase review. CI checks
@@ -273,11 +337,27 @@ def safe(value):
 def context_fingerprint(context):
     return hashlib.sha256(json.dumps({
         'tasks': context['tasks'], 'checks': context['ci_checks'], 'status': context['ci_status'],
+        'required_checks': context.get('required_checks', []),
+        'diff': context.get('diff', []), 'omitted_paths': context.get('omitted_paths', []),
+        'base_sha': context['branch']['base_sha'],
         'overview': context['overview'], 'merged': context['branch']['contained_in_default'],
     }, sort_keys=True).encode()).hexdigest()
 
 
+def ci_blockers(context):
+    blockers = []
+    for name in context.get('required_checks', []):
+        matches = [check for check in context.get('ci_checks', []) if check.get('name') == name]
+        if (not matches or any(check.get('status') != 'completed'
+                               or check.get('conclusion') != 'success'
+                               for check in matches)):
+            blockers.append(name)
+    return blockers
+
+
 def completion_candidates(report, context):
+    if ci_blockers(context):
+        return []
     tasks = {task['id']: task for task in context['tasks']}
     return [tasks[item['id']]['issue_number'] for item in report['tasks']
             if (item['assessment'] == 'complete'
@@ -290,6 +370,8 @@ def completion_marker(task_id):
 
 
 def close_completed_tasks(gh, report, context):
+    if ci_blockers(context):
+        return []
     tasks = {task['id']: task for task in context['tasks']}
     closed = []
     for item in report['tasks']:
@@ -310,10 +392,13 @@ def close_completed_tasks(gh, report, context):
         if len(comments) > 1:
             raise ValueError('Duplicate automated completion comments; resolve before closing.')
         paths = '\n'.join('- `' + safe(path).replace('`', '\\`') + '`' for path in item['paths'])
+        checks = ', '.join('`' + safe(name).replace('`', '\\`') + '`'
+                           for name in context['required_checks'])
         note = (note_marker + '\n## Automated completion evidence\n'
                 f'Branch: `{safe(context["branch"]["name"])}`  \n'
                 f'Commit: `{context["branch"]["head_sha"]}`\n\n'
                 + safe(item['evidence']) + '\n\nEvidence paths:\n' + paths + '\n\n'
+                + 'Required CI checks passed: ' + checks + '.\n\n'
                 'Gemini assessment validated by the contribution tracker; closing as completed.')
         if comments:
             gh.call(f'/issues/comments/{comments[0]["id"]}', {'body': note}, 'PATCH')
@@ -342,6 +427,9 @@ def render(report, context):
         if task['state'] == 'open' and not task['assignees']:
             lines.append('**Unassigned:** confirm dependencies with the component owner before claiming.')
     lines += ['', '### Suggested follow-ups', *['- ' + safe(s) for s in report['suggestions']],
+              '', 'Automatic closure CI gate: ' + (
+                  'ready' if not ci_blockers(context)
+                  else 'blocked by ' + ', '.join(safe(name) for name in ci_blockers(context))),
               '', f'Coverage: {len(context["diff"])} diff entries supplied; '
               f'{len(context["omitted_paths"])} omitted. No code was executed by this tracker.',
               'AI assessment; the tracker may close mapped subissues when automatic_closures is enabled. '
@@ -349,10 +437,13 @@ def render(report, context):
     return '\n'.join(lines)
 
 
-def review(gh, plan, branch, apply=False, force=False):
-    area = next((a for a in plan['areas'] if branch in a['branches']), None)
+def review(gh, plan, branch, apply=False, force=False, area=None):
+    matches = [candidate for candidate in plan['areas'] if branch in candidate['branches']]
+    area = area or (matches[0] if len(matches) == 1 else None)
     if not area:
-        return {'skipped': 'Branch has no component mapping: ' + branch}
+        detail = ('Branch has no component mapping: ' if not matches
+                  else 'Branch maps to multiple components; select an area: ')
+        return {'skipped': detail + branch}
     index = issue_index(list(gh.pages('/issues?state=all')), plan)
     parent = index.get(area['id'])
     if apply and not parent:
@@ -372,13 +463,7 @@ def review(gh, plan, branch, apply=False, force=False):
         return {'skipped': 'Branch and task/check context unchanged; no Gemini call.', 'branch': branch}
     report = ask_gemini(context)
     validate(report, context)
-    candidates = completion_candidates(report, context)
     closed = []
-    body = render(report, context)
-    state = {'version': 1, 'sha': sha, 'fingerprint': fingerprint, 'report': report}
-    body += '\n<!-- sentinel-checkpoint:' + base64.b64encode(json.dumps(state).encode()).decode() + ' -->'
-    if len(body) > 60000:
-        raise ValueError('Report too large for a comment; no update.')
     if apply:
         current = gh.call('/branches/' + quote(branch, safe=''))['commit']['sha']
         if current != sha:
@@ -387,8 +472,20 @@ def review(gh, plan, branch, apply=False, force=False):
             fresh = gh.call(f'/issues/comments/{previous["id"]}')
             if fresh['body'] != previous['body']:
                 raise ValueError('Comment changed concurrently; retry.')
-        if plan.get('automatic_closures', False):
-            closed = close_completed_tasks(gh, report, context)
+        # CI may finish or be rerun while Gemini is assessing the unchanged commit.
+        # Refresh it immediately before any issue mutation and fail closed on conflicts.
+        context['ci_checks'] = check_runs(gh, sha)
+        context['ci_status'] = gh.call(f'/commits/{sha}/status')['state']
+    candidates = completion_candidates(report, context)
+    fingerprint = context_fingerprint(context)
+    body = render(report, context)
+    state = {'version': 1, 'sha': sha, 'fingerprint': fingerprint, 'report': report}
+    body += '\n<!-- sentinel-checkpoint:' + base64.b64encode(json.dumps(state).encode()).decode() + ' -->'
+    if len(body) > 60000:
+        raise ValueError('Report too large for a comment; no update.')
+    if apply and plan.get('automatic_closures', False):
+        closed = close_completed_tasks(gh, report, context)
+        if closed:
             fingerprint = context_fingerprint(context)
             body = render(report, context)
             state = {'version': 1, 'sha': sha, 'fingerprint': fingerprint, 'report': report}
@@ -400,7 +497,30 @@ def review(gh, plan, branch, apply=False, force=False):
             gh.call(f'/issues/{parent["number"]}/comments', {'body': body}, 'POST')
     return {'parent': area['id'], 'branch': branch, 'comment': body,
             'closures_enabled': plan.get('automatic_closures', False),
-            'closure_candidates': candidates, 'closed_issues': closed, 'applied': apply}
+            'closure_candidates': candidates, 'closure_blockers': ci_blockers(context),
+            'closed_issues': closed, 'applied': apply}
+
+
+def review_targets(plan, branch=None):
+    return [(area, mapped) for area in plan['areas'] for mapped in area['branches']
+            if branch is None or mapped == branch]
+
+
+def review_mappings(gh, plan, branch=None, apply=False, force=False, reviewer=review):
+    targets = review_targets(plan, branch)
+    if branch is not None and not targets:
+        return [{'skipped': 'Branch has no component mapping: ' + branch}]
+    results = []
+    for area, mapped in targets:
+        try:
+            results.append(reviewer(gh, plan, mapped, apply, force, area))
+        except HTTPError as error:
+            if error.code == 404 and branch is None:
+                results.append({'branch': mapped, 'area': area['id'],
+                                'error': 'A required GitHub resource was not found; no update.'})
+                continue
+            raise
+    return results
 
 
 def main():
@@ -416,7 +536,7 @@ def main():
     if args.mode == 'validate':
         print(f'Valid plan: {len(plan["areas"])} parents, {sum(len(a["tasks"]) for a in plan["areas"])} subissues.')
         return
-    if os.environ.get('GITHUB_EVENT_NAME') in ('workflow_run', 'schedule') and not plan['automatic_reviews']:
+    if os.environ.get('GITHUB_EVENT_NAME') in ('workflow_run', 'schedule', 'push') and not plan['automatic_reviews']:
         print('Automatic reviews disabled; enable after rollout.')
         return
     gh = GitHub(args.repo or 'VinnyBitties/CS-4398-Project')
@@ -429,16 +549,7 @@ def main():
     else:
         if bool(args.branch) == args.all:
             raise ValueError('Choose exactly one of --branch NAME or --all.')
-        branches = [args.branch] if args.branch else [b for a in plan['areas'] for b in a['branches']]
-        result = []
-        for branch in branches:
-            try:
-                result.append(review(gh, plan, branch, args.apply, args.force))
-            except HTTPError as error:
-                if error.code == 404 and args.all:
-                    result.append({'branch': branch, 'error': 'A required GitHub resource was not found; no update.'})
-                    continue
-                raise
+        result = review_mappings(gh, plan, args.branch, args.apply, args.force)
     output = json.dumps(result, indent=2)
     if os.environ.get('GITHUB_STEP_SUMMARY'):
         # A text code block prevents model output from becoming active report markup.

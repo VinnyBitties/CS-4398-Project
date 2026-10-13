@@ -22,6 +22,8 @@ class FakeBranchGitHub:
         self.writes=[]
         self.comparisons=[]
         self.patch_files=[{'filename':'model.py','status':'modified','patch':'+def predict(): pass'}]
+        self.check_runs=[]
+        self.next_check_runs=None
 
     def pages(self,path):
         if path=='/issues/1/comments':
@@ -51,8 +53,13 @@ class FakeBranchGitHub:
             self.comparisons.append(path)
             base=path.split('/compare/')[1].split('...')[0]
             ancestor=A if base=='main' or self.rewritten else base
-            return {'status':'ahead','merge_base_commit':{'sha':ancestor},'files':self.patch_files}
-        if '/check-runs?' in path:return {'check_runs':[], 'total_count':0}
+            files=[] if base==self.sha else self.patch_files
+            return {'status':'ahead','merge_base_commit':{'sha':ancestor},'files':files}
+        if '/check-runs?' in path:
+            if self.next_check_runs is not None:
+                self.check_runs=self.next_check_runs
+                self.next_check_runs=None
+            return {'check_runs':self.check_runs, 'total_count':len(self.check_runs)}
         if path.endswith('/status'):return {'state':'pending'}
         if path=='/issues/comments/3':
             return {**self.previous,'body':self.fresh_parent_body or self.previous['body']}
@@ -63,6 +70,7 @@ class BranchTests(unittest.TestCase):
     def setUp(self):
         self.gh=FakeBranchGitHub()
         self.area={'id':'ml','title':'ML','branches':['ML-Axel'],
+                   'required_checks':['ML tests'],
                    'tasks':[{'id':'ml-01','title':'Predict','goal':'Predict','done_when':'Inference exists'}]}
         self.plan={'areas':[self.area]}
         self.report={'summary':'Prediction added','tasks':[{'id':'ml-01','assessment':'review_needed',
@@ -107,6 +115,40 @@ class BranchTests(unittest.TestCase):
         self.assertIn('history rewritten',context['branch']['comparison'])
         self.assertEqual(context['branch']['base_sha'],A)
 
+    def test_main_uses_configured_historical_baseline(self):
+        self.area['branches']=['main']
+        self.area['baseline']=A
+        context=t.collect(self.gh,'main',self.area,{})
+        self.assertIn('/compare/'+A+'...'+B,self.gh.comparisons)
+        self.assertEqual(context['branch']['base_sha'],A)
+        self.assertIn('configured baseline',context['branch']['comparison'])
+
+    def test_area_paths_exclude_unrelated_diff_evidence(self):
+        self.area['paths']=['ML/']
+        self.gh.patch_files=[
+            {'filename':'ML/model.py','status':'modified','patch':'+def predict(): pass'},
+            {'filename':'backend/server.js','status':'modified','patch':'+serve()'},
+        ]
+        context=t.collect(self.gh,'ML-Axel',self.area,{})
+        self.assertEqual([item['path'] for item in context['diff']],['ML/model.py'])
+
+    def test_one_branch_can_target_multiple_areas(self):
+        other={**self.area,'id':'docs','branches':['main']}
+        self.area['branches']=['main']
+        targets=t.review_targets({'areas':[self.area,other]},'main')
+        self.assertEqual([(area['id'],branch) for area,branch in targets],
+                         [('ml','main'),('docs','main')])
+
+    def test_review_mappings_dispatches_every_area_on_shared_branch(self):
+        other={**self.area,'id':'docs','branches':['main']}
+        self.area['branches']=['main']
+        plan={'areas':[self.area,other]}
+        def reviewer(_gh,_plan,branch,_apply,_force,area):
+            return {'parent':area['id'],'branch':branch}
+        results=t.review_mappings(self.gh,plan,'main',reviewer=reviewer)
+        self.assertEqual(results,[{'parent':'ml','branch':'main'},
+                                  {'parent':'docs','branch':'main'}])
+
     def test_quota_does_not_advance_checkpoint(self):
         self.run_review(True)
         before=self.gh.previous['body']
@@ -135,6 +177,7 @@ class BranchTests(unittest.TestCase):
 
     def test_enabled_closure_comments_and_closes_mapped_subissue_once(self):
         self.plan['automatic_closures']=True
+        self.gh.check_runs=[{'name':'ML tests','status':'completed','conclusion':'success'}]
         self.report['tasks'][0].update(assessment='complete',
                                        evidence='model.py provides the required prediction function.',
                                        next_step='Close the completed task.')
@@ -148,11 +191,85 @@ class BranchTests(unittest.TestCase):
         self.assertEqual(len(self.gh.completion_comments),1)
         self.assertIn('model.py provides the required prediction function.',
                       self.gh.completion_comments[0]['body'])
+        self.assertIn('Required CI checks passed: `ML tests`.',
+                      self.gh.completion_comments[0]['body'])
         self.assertIn('Issue: closed',result['comment'])
         self.assertEqual(self.run_review(True)[1],0)
         self.assertEqual(len(self.gh.completion_comments),1)
 
+    def test_complete_assessment_without_required_ci_never_closes(self):
+        self.plan['automatic_closures']=True
+        self.report['tasks'][0].update(assessment='complete',
+                                       evidence='model.py provides the required prediction function.',
+                                       next_step='Close the completed task.')
+        result,count=self.run_review(True)
+        self.assertEqual(count,1)
+        self.assertEqual(result['closure_candidates'],[])
+        self.assertEqual(result['closed_issues'],[])
+        self.assertEqual(self.gh.child['state'],'open')
+        self.assertIn('ML tests',result['closure_blockers'])
+
+    def test_completed_report_closes_after_ci_passes_on_the_same_sha(self):
+        self.plan['automatic_closures']=True
+        self.report['tasks'][0].update(assessment='complete',
+                                       evidence='model.py provides the required prediction function.',
+                                       next_step='Close the completed task.')
+        first,count=self.run_review(True)
+        self.assertEqual(count,1)
+        self.assertEqual(first['closed_issues'],[])
+        self.gh.check_runs=[{'id':1,'name':'ML tests','status':'completed',
+                             'conclusion':'success','app':{'slug':'github-actions'},
+                             'check_suite':{'id':11}}]
+        second,count=self.run_review(True)
+        self.assertEqual(count,1)
+        self.assertEqual(second['closed_issues'],[2])
+
+    def test_conflicting_duplicate_required_checks_block_closure(self):
+        self.plan['automatic_closures']=True
+        self.gh.check_runs=[
+            {'id':1,'name':'ML tests','status':'completed','conclusion':'success',
+             'app':{'slug':'github-actions'},'check_suite':{'id':11}},
+            {'id':2,'name':'ML tests','status':'completed','conclusion':'failure',
+             'app':{'slug':'github-actions'},'check_suite':{'id':12}},
+        ]
+        self.report['tasks'][0].update(assessment='complete',
+                                       evidence='model.py provides the required prediction function.',
+                                       next_step='Close the completed task.')
+        result,_=self.run_review(True)
+        self.assertEqual(result['closed_issues'],[])
+        self.assertIn('ML tests',result['closure_blockers'])
+
+    def test_ci_is_refreshed_immediately_before_closure(self):
+        self.plan['automatic_closures']=True
+        self.gh.check_runs=[{'name':'ML tests','status':'completed','conclusion':'success'}]
+        self.report['tasks'][0].update(assessment='complete',
+                                       evidence='model.py provides the required prediction function.',
+                                       next_step='Close the completed task.')
+        def model(_context):
+            self.gh.next_check_runs=[{'name':'ML tests','status':'completed','conclusion':'failure'}]
+            return self.report
+        with patch.object(t,'ask_gemini',side_effect=model):
+            result=t.review(self.gh,self.plan,'ML-Axel',True)
+        self.assertEqual(result['closed_issues'],[])
+        self.assertIn('ML tests',result['closure_blockers'])
+
+    def test_failed_or_pending_required_ci_never_closes(self):
+        self.plan['automatic_closures']=True
+        self.gh.check_runs=[
+            {'name':'ML tests','status':'completed','conclusion':'failure'},
+            {'name':'unrelated lint','status':'completed','conclusion':'success'},
+        ]
+        self.report['tasks'][0].update(assessment='complete',
+                                       evidence='model.py provides the required prediction function.',
+                                       next_step='Close the completed task.')
+        result,count=self.run_review(True)
+        self.assertEqual(count,1)
+        self.assertEqual(result['closure_candidates'],[])
+        self.assertEqual(self.gh.child['state'],'open')
+        self.assertIn('ML tests',result['closure_blockers'])
+
     def test_disabled_closure_is_reported_without_closing(self):
+        self.gh.check_runs=[{'name':'ML tests','status':'completed','conclusion':'success'}]
         self.report['tasks'][0].update(assessment='complete',
                                        evidence='model.py provides the required prediction function.',
                                        next_step='Close the completed task.')
@@ -166,6 +283,7 @@ class BranchTests(unittest.TestCase):
 
     def test_complete_dry_run_never_closes(self):
         self.plan['automatic_closures']=True
+        self.gh.check_runs=[{'name':'ML tests','status':'completed','conclusion':'success'}]
         self.report['tasks'][0].update(assessment='complete',
                                        evidence='model.py provides the required prediction function.',
                                        next_step='Close the completed task.')

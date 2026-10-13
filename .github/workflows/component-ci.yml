@@ -1,0 +1,136 @@
+name: Component CI
+
+on:
+  push:
+    branches:
+      - main
+      - feature/dynamic-sandbox-engine
+      - ML-Axel
+      - llm-threat-intelligence
+      - backend-Dhrubo
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dynamic:
+    name: Dynamic sandbox tests
+    if: github.ref_name == 'feature/dynamic-sandbox-engine' || github.head_ref == 'feature/dynamic-sandbox-engine'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: dynamic_telemetry/requirements.txt
+      - run: python -m pip install -r dynamic_telemetry/requirements.txt
+      - run: python -m compileall -q dynamic_telemetry
+      - name: Verify sandbox API structure
+        run: >-
+          python -c "import ast, pathlib;
+          tree=ast.parse(pathlib.Path('dynamic_telemetry/api.py').read_text());
+          names={node.name for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))};
+          assert {'health_check','detonate_sample','parse_sysmon_evtx'} <= names"
+
+  ml:
+    name: ML tests
+    if: github.ref_name == 'ML-Axel' || github.head_ref == 'ML-Axel'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - run: python -m compileall -q ML
+      - name: Exercise report analysis
+        working-directory: ML
+        run: >-
+          python -c "from report_parser import analyze_report;
+          result=analyze_report({'processes': [], 'network': [], 'dns': [], 'file_drops': [], 'registry': []});
+          assert hasattr(result, 'to_dict')"
+
+  llm:
+    name: LLM tests
+    if: github.ref_name == 'llm-threat-intelligence' || github.head_ref == 'llm-threat-intelligence'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m compileall -q llm-threat-intelligence
+      - name: Exercise threat-intelligence and prompt generation
+        working-directory: llm-threat-intelligence
+        run: >-
+          python -c "from threat_intel import analyze_indicator;
+          from llm_analyzer import build_security_prompt;
+          assert analyze_indicator('example.com','domain')['status'] == 'received';
+          assert 'Important findings' in build_security_prompt({'filename':'sample.exe'})"
+
+  backend:
+    name: Backend tests
+    if: github.ref_name == 'backend-Dhrubo' || github.head_ref == 'backend-Dhrubo'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  frontend:
+    name: Frontend tests
+    if: github.ref_name == 'main' || github.head_ref == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Parse dashboard HTML
+        run: >-
+          python3 -c "from html.parser import HTMLParser;
+          from pathlib import Path;
+          parser=HTMLParser();
+          [parser.feed(Path(path).read_text()) for path in ('website/index.html','website/dashboard/home.html')];
+          assert Path('website/style.css').stat().st_size > 0;
+          assert Path('website/dashboard/dashboard.css').stat().st_size > 0"
+
+  documentation:
+    name: Documentation checks
+    if: github.ref_name == 'main' || github.head_ref == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: python3 scripts/issue_tracker.py validate
+      - name: Verify maintained documentation
+        run: >-
+          python3 -c "from pathlib import Path;
+          required=('README.md','docs/project-overview.md','docs/CONTRIBUTION_TRACKER.md');
+          assert all(Path(path).stat().st_size > 0 for path in required)"

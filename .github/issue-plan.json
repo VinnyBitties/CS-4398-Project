@@ -7,8 +7,10 @@
       "title": "Dynamic analysis and sandbox",
       "owners": "Vincent and Jarrel",
       "branches": [
-        "sandbox/telemetry---vinny-&-Joaquin"
+        "feature/dynamic-sandbox-engine"
       ],
+      "required_checks": ["Dynamic sandbox tests"],
+      "paths": ["dynamic_telemetry/", "Sentinel_Dynamic_Analysis_Documentation_Form.docx"],
       "goal": "Run unknown Windows executables in an isolated, restorable environment and supply usable runtime telemetry.",
       "done_when": "Agreed subissues are complete and the component owner confirms integration and verification.",
       "tasks": [
@@ -49,9 +51,10 @@
       "title": "Machine learning",
       "owners": "Axel P and Diego",
       "branches": [
-        "ML-Axel",
-        "ML-Diego"
+        "ML-Axel"
       ],
+      "required_checks": ["ML tests"],
+      "paths": ["ML/", "requirements.txt", "Sentinel_Machine_Learning_Documentation_Form.docx"],
       "goal": "Provide static and behavioral classification plus reproducible evaluation of the detection layers.",
       "done_when": "Agreed subissues are complete and the component owner confirms integration and verification.",
       "tasks": [
@@ -91,7 +94,9 @@
       "id": "llm",
       "title": "LLM threat analysis",
       "owners": "J.J",
-      "branches": [],
+      "branches": ["llm-threat-intelligence"],
+      "required_checks": ["LLM tests"],
+      "paths": ["llm-threat-intelligence/", "Sentinel_LLM_Threat_Intelligence_Documentation_Form.docx"],
       "goal": "Explain observed findings and provide supported MITRE ATT&CK mappings and recommendations.",
       "done_when": "Agreed subissues are complete and the component owner confirms integration and verification.",
       "tasks": [
@@ -134,6 +139,8 @@
       "branches": [
         "backend-Dhrubo"
       ],
+      "required_checks": ["Backend tests"],
+      "paths": ["backend/", "Sentinel_Backend_Development_Documentation_Form.docx"],
       "goal": "Accept submissions, coordinate analysis jobs, and expose stored results to the dashboard.",
       "done_when": "Agreed subissues are complete and the component owner confirms integration and verification.",
       "tasks": [
@@ -173,7 +180,10 @@
       "id": "frontend",
       "title": "Analyst dashboard",
       "owners": "Sebastian",
-      "branches": [],
+      "branches": ["main"],
+      "baseline": "b0dc3db1fb1ed92f8cb7c0fcb9e76b7c4c4b328b",
+      "required_checks": ["Frontend tests"],
+      "paths": ["website/", "Sentinel_Frontend_Development_Documentation_Form.docx"],
       "goal": "Make submission, scores, observed behaviors, and explanations accessible in one interface.",
       "done_when": "Agreed subissues are complete and the component owner confirms integration and verification.",
       "tasks": [
@@ -213,7 +223,10 @@
       "id": "static",
       "title": "Signature and static analysis",
       "owners": "Kyle",
-      "branches": [],
+      "branches": ["main"],
+      "baseline": "5244bd8d7f5af2ce805d40f32e5af663eaf6424a",
+      "required_checks": ["Python 3.14 / ubuntu-latest", "Python 3.14 / windows-latest"],
+      "paths": ["malware_detection/", "Sentinel_Malware_Detection_Documentation_Form.docx"],
       "goal": "Produce signature matches and static executable features used by the rest of the pipeline.",
       "done_when": "Agreed subissues are complete and the component owner confirms integration and verification.",
       "tasks": [
@@ -253,7 +266,10 @@
       "id": "documentation",
       "title": "Documentation and development support",
       "owners": "Cade",
-      "branches": [],
+      "branches": ["main"],
+      "baseline": "5244bd8d7f5af2ce805d40f32e5af663eaf6424a",
+      "required_checks": ["Documentation checks"],
+      "paths": ["README.md", "docs/", "Sentinel_Documentation_All_Rounder_Documentation_Form.docx", "Sentinel_Project_Wide_Documentation_Record.docx"],
       "goal": "Maintain useful project documentation and support scoped work across component branches.",
       "done_when": "Agreed subissues are complete and the component owner confirms integration and verification.",
       "tasks": [
@@ -294,8 +310,11 @@
       "title": "Integration and contribution visibility",
       "owners": "Shared; Cade can lead the proposed tracking automation",
       "branches": [
-        "dev-branch"
+        "main"
       ],
+      "baseline": "5244bd8d7f5af2ce805d40f32e5af663eaf6424a",
+      "required_checks": ["Tracker tests"],
+      "paths": [".github/", "scripts/issue_tracker.py", "tests/contribution_tracker/"],
       "goal": "Connect the components and help contributors identify available work. The automation below is a proposed development addition, not a product requirement in the proposal.",
       "done_when": "Agreed subissues are complete and the component owner confirms integration and verification.",
       "tasks": [
