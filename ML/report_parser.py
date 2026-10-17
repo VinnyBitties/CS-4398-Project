@@ -52,14 +52,81 @@ def analyze_report(report: dict[str, Any], threshold: float = DEFAULT_MALICIOUS_
     )
 
 
+# Counts in the summary are authoritative: documented event arrays may be
+# abbreviated. Do not require their lengths to equal these counts.
+SANDBOX_COUNTS = {
+    "processes_created": "processes",
+    "files_created": "file_drops",
+    "registry_modifications": "registry",
+    "network_connections": "network",
+    "dns_queries": "dns",
+    "remote_threads_injected": "remote_threads",
+}
+
+
+def normalize_report(report: dict[str, Any]) -> dict[str, Any]:
+    """Validate Azure Sysmon telemetry or preserve the existing report shape.
+
+    Both inference and training reach this function through extract_features.
+    Missing sandbox fields raise ValueError rather than becoming zero counts.
+    No signatures are invented from raw event counts.
+    """
+    if not isinstance(report, dict):
+        raise ValueError("Report must be a JSON object")
+    sandbox = any(key in report for key in
+                  ("job_id", "summary", "file_drops", "remote_threads")) or isinstance(report.get("network"), list)
+    if not sandbox:
+        if not isinstance(report.get("behavior"), dict) or not isinstance(report["behavior"].get("summary"), dict):
+            raise ValueError("Unrecognized report: expected sandbox summary or behavior.summary")
+        if not isinstance(report.get("network"), dict):
+            raise ValueError("Legacy report network must be an object")
+        _validate_signatures(report)
+        return report
+
+    summary = report.get("summary")
+    if not isinstance(summary, dict):
+        raise ValueError("Sandbox summary must be an object")
+    for count, events in SANDBOX_COUNTS.items():
+        value = summary.get(count)
+        if type(value) is not int or value < 0:
+            raise ValueError(f"summary.{count} must be a non-negative integer")
+        event_list = report.get(events)
+        if not isinstance(event_list, list) or any(not isinstance(event, dict) for event in event_list):
+            raise ValueError(f"{events} must be an array of event objects")
+    _validate_signatures(report)
+    return {
+        **report,
+        "behavior": {"summary": {
+            "processes_created": summary["processes_created"],
+            "num_files_written": summary["files_created"],
+            "num_registry_keys_set": summary["registry_modifications"],
+        }},
+        # Explicit counts prevent DNS from being counted as connections and
+        # preserve totals when arrays contain only a subset of the events.
+        "network": {
+            "num_network_connections": summary["network_connections"],
+            "num_dns_requests": summary["dns_queries"],
+            "dns": report["dns"],
+        },
+        "signatures": report.get("signatures", []),
+    }
+
+
+def _validate_signatures(report: dict[str, Any]) -> None:
+    signatures = report.get("signatures", [])
+    if not isinstance(signatures, list) or any(not isinstance(item, dict) for item in signatures):
+        raise ValueError("signatures must be an array of objects")
+
+
 def extract_features(report: dict[str, Any]) -> dict[str, int]:
+    report = normalize_report(report)
     signatures = _as_list(report.get("signatures"))
     network = _as_dict(report.get("network"))
     behavior = _as_dict(report.get("behavior"))
     summary = _as_dict(behavior.get("summary"))
 
     network_connections = _count_network_connections(network)
-    dns_requests = len(_as_list(network.get("dns")))
+    dns_requests = network.get("num_dns_requests", len(_as_list(network.get("dns"))))
 
     files_written = _first_int(
         summary,
@@ -176,6 +243,8 @@ def _has_keyword_match(report: dict[str, Any], signatures: list[dict[str, Any]],
 
 
 def _count_network_connections(network: dict[str, Any]) -> int:
+    if "num_network_connections" in network:
+        return network["num_network_connections"]
     if not network:
         return 0
 
