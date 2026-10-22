@@ -1,0 +1,61 @@
+.page {
+	background: linear-gradient(
+		135deg,
+		#d99b20,
+		#ffe082
+	);
+	display: flex;
+	justify-content: center;
+}
+
+.content-container {
+	display: block;
+	width: 300px;
+}
+
+.input-container > * {
+	position: relative;
+	display: flex;
+	justify-content: center;
+	margin-top: 10px;
+}
+
+/*SOURCE: https://developer.mozilla.org/en-US/docs/Web/API/HTML_Drag_and_Drop_API/File_drag_and_drop*/
+#drop-zone {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	/*width: 300px;*/
+	width: 100%;
+	height: 200px;
+	padding: 1em;
+	border: 3px solid #cccccc;
+	border-radius: 4px;
+	color: slategray;
+	cursor: pointer;
+	color: white;
+	background: radial-gradient(circle, #d9b05f, #2225);
+}
+
+#file-input {
+	display: none;
+}
+
+.link-input {
+	border: 2px solid lightgray;
+	border-radius: 50px;
+	background-color: #fffa;
+}
+
+.submit-file-link-check > button {
+	width: 100%;
+	height: 30px;
+	border-radius: 50px;
+	background-color: #00cc00;
+	font-size: 20px;
+}
+
+.progress-container {
+	display: none;
+	width: 300px;
+}

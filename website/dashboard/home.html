@@ -6,15 +6,8 @@
 	<title>Coin Flip Defense - Home</title>
 	<link rel="icon" type="image/svg+xml" href="../icon.svg">
 	<link rel="stylesheet" href="dashboard.css">
+	<link rel="stylesheet" href="home.css">
 	<style>
-	.content-container {
-		display: block;
-		background: linear-gradient(
-			135deg,
-			#d99b20,
-			#ffe082
-		);
-	}
 	
 	.coin-container {
 		/*width: 150px;
@@ -87,38 +80,13 @@
 		transition: transform 2.5s cubic-bezier(.05, .7, .15, 1);
 	}
 	
-	.drop-zone-container {
-		position: relative;
-		display: flex;
-		justify-content: center;
-	}
-	
-	/*SOURCE: https://developer.mozilla.org/en-US/docs/Web/API/HTML_Drag_and_Drop_API/File_drag_and_drop*/
-	#drop-zone {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 300px;
-		height: 200px;
-		padding: 1em;
-		border: 3px solid #cccccc;
-		border-radius: 4px;
-		color: slategray;
-		cursor: pointer;
-		color: white;
-		background: radial-gradient(circle, #d9b05f, #2225);
-	}
-	
-	#file-input {
-		display: none;
-	}
 	</style>
 </head>
 <body>
 	<script>
-	const params = new URLSearchParams(window.location.search);
+	/*const params = new URLSearchParams(window.location.search);
 	const loginstatus = params.get("login");
-	console.log("login status: " + loginstatus);
+	console.log("login status: " + loginstatus);*/
 	</script>
 	
 	<nav class="sidebar">
@@ -126,18 +94,50 @@
 		<a href="reports">Reports</a>
 	</nav>
 	<audio src="coin-flip.mp3" id="coinFlip"></audio>
-	<div class="content-container">
-		<div class="coin-container">
-			<div class="coin" id="coin">
-				<div class="side heads">H</div>
-				<div class="side tails">T</div>
+	<div class="page">
+		<div class="content-container">
+			<div class="coin-container">
+				<div class="coin" id="coin">
+					<div class="side heads">H</div>
+					<div class="side tails">T</div>
+				</div>
 			</div>
-		</div>
-		<div class="drop-zone-container">
-			<label id="drop-zone">
-				Click or drop to upload.
-				<input type="file" id="file-input" accept=".exe" />
-			</label>
+			<div class="input-container" id="submitContent">
+				<div class="drop-zone-container">
+					<label id="drop-zone">
+						<span id="drop-zone-text">Click or drop to upload.</span>
+						<input type="file" id="file-input" accept=".exe" />
+					</label>
+				</div>
+				<div class="link-container">
+					<label>
+						Or enter link: 
+						<input type="text" id="link-input" class="link-input" placeholder="Enter link"></input>
+					</label>
+				</div>
+				<div class="submit-file-link-check">
+					<button onClick="sendOff()">Submit</button>
+				</div>
+			</div>
+			<div class ="progress-container" id="progressContent">
+				<table>
+					<tr>
+						<td>Title</td>
+					</tr>
+					<tr>
+						<td>Step</td>
+						<td>Value</td>
+					</tr>
+					<tr>
+						<td>Step</td>
+						<td>Value</td>
+					</tr>
+					<tr>
+						<td>Step</td>
+						<td>Value</td>
+					</tr>
+				</table>
+			</div>
 		</div>
 	</div>
 	<script>
@@ -196,6 +196,15 @@
 	
 	const fileInput = document.getElementById("file-input");
 	const dropZone = document.getElementById("drop-zone");
+	const dropZoneText = document.getElementById("drop-zone-text");
+	const linkValue = document.getElementById("link-input");
+	
+	let submitValue = null;
+	
+	linkValue.addEventListener("keyup", (e) => {
+		dropZoneText.textContent = "Click or drop to upload."
+		submitValue = linkValue.value;
+	});
 	
 	function handleFile(file) {
 		if (!file) return;
@@ -206,11 +215,11 @@
 			return;
 		}
 	
-		console.log(file.name);
+		dropZoneText.textContent = file.name;
 	
-		dropZone.textContent = file.name;
-	
-		startSignal();
+		//startSignal();
+		linkValue.value = "";
+		submitValue = file;
 	}
 	
 	// Normal click-to-upload
@@ -244,6 +253,23 @@
 		const file = e.dataTransfer.files[0];
 		handleFile(file);
 	});
+	
+	const submitContent = document.getElementById("submitContent");
+	const progressContent = document.getElementById("progressContent");
+	
+	function sendOff() {
+		if(submitValue == null) {
+			return;
+		} else if(typeof submitValue === "string") {
+			console.log("submit link");
+			submitContent.style.display = "none";
+			progressContent.style.display = "block";
+		} else if(submitValue instanceof File && submitValue.name.split(".").pop() === "exe") {
+			console.log("submit exe");
+			submitContent.style.display = "none";
+			progressContent.style.display = "block";
+		}
+	}
 	</script>
 </body>
 </html>
