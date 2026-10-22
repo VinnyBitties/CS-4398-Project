@@ -59,3 +59,39 @@
 	display: none;
 	width: 300px;
 }
+
+.progress-step {
+	background: #fff8;
+	margin: 4px 0px;
+	height: 45px;
+	display: grid;
+	grid-template-columns: 15% 85%;
+	border: 2px solid gray;
+	padding: 5px 5px 5px 5px;
+}
+
+.progress-step-content {
+	display: grid;
+	grid-template-rows: 50% 50%;
+}
+
+.progress-type {
+	font-weight: bold;
+}
+
+.progress-state.complete {
+	color: green;
+}
+
+.progress-state.running {
+	color: #777720;
+}
+
+.progress-type.waiting {
+	color: black;
+}
+
+.progress-step .side {
+	font-size: 20px;
+	border-width: 2px;
+}
