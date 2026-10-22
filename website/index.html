@@ -23,8 +23,32 @@
 		</div>
 		<button onclick="submitInfo()" class="submit">Log In</button>
 		<div class="non-sign-in">
-			<a>Create account</a>
+			<a href="" id="accountCreator">Create account</a>
 			<a href="dashboard/home.html?login=0">No Sign In</a>
+		</div>
+	</div>
+	
+	<div id="popup" class="popup-overlay">
+		<div class="popup-content">
+			<h2 class="popup-title">Create Account</h2>
+			<form>
+				<div class="popup-input">
+					<div>Username:</div>
+					<input type="text" required>
+				</div>
+				<div class="popup-input">
+					<div>Password:</div>
+					<input type="password" required>
+				</div>
+				<div class="popup-input">
+					<div>Confirm Password:</div>
+					<input type="password" required>
+				</div>
+				<div class="popup-buttons">
+					<button type="submit" class="btn-submit">Sign Up</button>
+					<button type="button" class="btn-close" onclick="closePopup()">Cancel</button>
+				</div>
+			</form>
 		</div>
 	</div>
 	
@@ -37,6 +61,15 @@
 			const status = document.getElementById("loginstatus");
 			status.textContent = "Username and password must be filled out.";
 		} else window.location.href="dashboard/home.html?login=1"
+	}
+	
+	document.getElementById("accountCreator").addEventListener("click", function(e) {
+		e.preventDefault();
+		document.getElementById("popup").style.display = "grid";
+	});
+	
+	function closePopup() {
+		document.getElementById("popup").style.display = "none";
 	}
 	</script>
 </body>
