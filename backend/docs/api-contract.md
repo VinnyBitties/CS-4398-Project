@@ -57,8 +57,8 @@ Each `results[]` entry:
 | `signature` | files, links | **Live** | `{ matched, checked: "sha256"\|"url", match: { type, name, severity, source } \| null }` |
 | `static_analysis` | files | **Live** (mock analyzer by default, real one by configuration) | The static analyzer's report, `schema_version` `1.2.0`, defined field by field in `malware_detection/REPORT_CONTRACT.md`. With the default mock, the PE fields are canned values. This is extracted evidence, not a verdict. |
 | `static_ml` | files | Planned | To be defined with ML. |
-| `sandbox` | files, links | Planned | Blocked on the sandbox telemetry schema. |
-| `behavioral_ml` | files, links | Planned | Depends on `sandbox`. |
+| `sandbox` | files | **Live when `SANDBOX_URL` is set** | The sandbox's `/detonate` response as-is: `{ job_id, filename, timeout_seconds, summary: { process_count, network_count, dns_count, file_drops_count, registry_count }, telemetry: { processes[], network[], dns[], file_drops[], registry[] } }`. Links are not detonated yet. |
+| `behavioral_ml` | files | **Live when `SANDBOX_URL` is set** | The ML service's verdict, `{ malicious, risk_score, risk_level, features, evidence[] }`, plus `input_summary` (the counts that were scored) and `adapter_notes[]` (values the backend had to fill in). |
 | `llm` | files, links | Planned | To be defined with LLM/Threat Intelligence. |
 
 New stages appear as extra `results[]` entries. Nothing else about the sample
@@ -178,7 +178,10 @@ all from `static_analysis`: `NONZERO_EXIT` (most often: not a valid PE file;
 `error.details.analyzer_error` then holds the analyzer's own
 `{ error, message }`, e.g. `PEFormatError`),
 `TIMEOUT`, `BAD_JSON`, `UNSUPPORTED_SCHEMA`, `LAUNCH_FAILED`,
-`INPUT_NOT_FOUND`.
+`INPUT_NOT_FOUND`. From `sandbox` and `behavioral_ml`: `CONNECTION_FAILED`,
+`TIMEOUT`, `BAD_STATUS`, `BAD_JSON`; `TELEMETRY_PARSE_ERROR` (the sandbox ran
+but could not read its Sysmon log, so nothing is scored); `BAD_SANDBOX_REPORT`;
+and, on `behavioral_ml` only, `NO_SANDBOX_REPORT` (the sandbox stage failed).
 
 ## Open questions
 

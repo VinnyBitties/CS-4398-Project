@@ -48,10 +48,17 @@ const config = {
 
   maxUrlLength: parseInt(process.env.MAX_URL_LENGTH || "2048", 10),
 
-  // Behavioral ML stage (e.g. ML/predict.py --serve). Not wired into a
-  // route yet -- the sandbox's telemetry schema needs to be settled first
-  // (see backend/README.md "Open coordination items"). httpStage.js is
-  // ready to call this once there's an agreed report shape to send it.
+  // Sandbox stage (dynamic_telemetry/api.py). Empty = the sandbox and
+  // behavioral ML stages are skipped. Base URL only; /detonate is appended.
+  sandboxUrl: process.env.SANDBOX_URL || "",
+  // How long the sample runs inside the VM (the sandbox's own `timeout`).
+  sandboxDetonationSeconds: parseInt(process.env.SANDBOX_DETONATION_SECONDS || "15", 10),
+  // Whole HTTP request: revert + detonation + log export and parsing.
+  sandboxTimeoutMs: parseInt(process.env.SANDBOX_TIMEOUT_MS || "120000", 10),
+
+  // Behavioral ML stage (ML/predict.py --serve). Runs after the sandbox
+  // stage; src/adapters/sandboxToMl.js converts the sandbox's report into
+  // the shape the ML service expects.
   behavioralMlUrl: process.env.BEHAVIORAL_ML_URL || "http://127.0.0.1:8000/",
   behavioralMlTimeoutMs: parseInt(process.env.BEHAVIORAL_ML_TIMEOUT_MS || "15000", 10),
 };

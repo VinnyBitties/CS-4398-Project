@@ -24,11 +24,12 @@ queue, pipeline orchestration, and historical scan records (FR01, FR02, FR08).
       full report storage exist as a generic `report_json` column per stage.
 - [ ] [backend-04] Wire the static ML stage (FR03) into the pipeline once it
       exists -- not started by any team member yet as of this writing.
-- [ ] [backend-05] Wire the behavioral ML stage (FR05) into the pipeline.
-      `src/stages/httpStage.js` implements the HTTP-call pattern the ML team's
-      `predict.py --serve` expects, tested against a mock server, but not
-      wired into a route -- blocked on the sandbox telemetry schema (see
-      Dependencies below).
+- [x] [backend-05] Wire the sandbox and behavioral ML stages (FR05) into the
+      pipeline. `sandbox` uploads to `dynamic_telemetry/api.py`'s `/detonate`;
+      `behavioral_ml` converts that report with `src/adapters/sandboxToMl.js`
+      and calls `predict.py --serve`. Verified against the real `predict.py`
+      from `ML-Axel` and a mock sandbox; not yet against the real sandbox VM.
+      Off unless `SANDBOX_URL` is set.
 - [ ] [backend-06] Wire the LLM threat-analysis stage (FR06) into the pipeline.
       Not started; no LLM/Threat Intel branch exists yet as of this writing.
 - [x] [backend-08] Accept link/URL submissions (professor feedback, suggestion
@@ -60,8 +61,11 @@ queue, pipeline orchestration, and historical scan records (FR01, FR02, FR08).
   `behavior.summary.num_processes_created`, etc.). Since the sandbox won't
   produce Cuckoo's exact format, either the sandbox needs to emit
   Cuckoo-compatible JSON, or `report_parser.py`'s field mapping needs to be
-  updated to match whatever schema the sandbox team settles on. Backend can't finalize the behavioral-ML wiring until this is resolved
-  -- needs a three-way conversation between Dynamic Analysis, ML, and Backend.
+  updated to match whatever schema the sandbox team settles on.
+  Update 2026-10-23: Axel's 2026-10-17 parser accepts a sandbox-style report,
+  but its field names still differ from what `api.py` sends. The backend now
+  translates (`src/adapters/sandboxToMl.js`), so this no longer blocks
+  backend work; one agreed shape would let the adapter be deleted.
 - **Dashboard endpoints:** drafted in `docs/api-contract.md`, not yet agreed
   with the frontend (Sebastian's `website` branch). Its "Open questions"
   section lists what needs a decision, starting with route names.
@@ -74,5 +78,5 @@ preferred convention over `/samples`.
 
 ## Completion
 
-Status: active. Not ready for `Status: final` -- static ML, behavioral ML, and
-LLM stages are unimplemented.
+Status: active. Not ready for `Status: final` -- static ML and LLM stages are
+unimplemented, and the sandbox stage has not run against the real VM yet.
