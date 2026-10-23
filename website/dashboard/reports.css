@@ -1,0 +1,89 @@
+.page {
+	display: flex;
+	justify-content: center;
+}
+
+.list-container {
+	width: 400px;
+	display: flex;
+	align-items: center;
+	flex-direction: column;
+	padding: 0px 20px;
+	margin: 0px 20px;
+}
+
+.items-container {
+	display: block;
+	width: 95%;
+}
+
+.item {
+	display: flex;
+	flex-direction: row;
+	height: 30px;
+	padding-left: 5px;
+	margin-left: 5px;
+}
+
+.titles {
+	background: #fff6;
+	margin-bottom: 10px;
+}
+
+.light {
+	background: #fff8;
+}
+
+.dark {
+	background: #fff6;
+}
+
+.item > * {
+	align-content: center;
+}
+
+.fileLink {
+	flex: 0 0 40%;
+}
+
+.status {
+	flex: 0 0 40%;
+}
+
+.report {
+	flex: 0 0 10%;
+}
+
+.reports-container {
+	display: flex;
+	flex-direction: column;
+}
+
+#pagination {
+	width: 400px;
+	display: flex;
+	flex-direction: row;
+	justify-content: center;
+	margin: 0px 20px;
+	padding: 0px 20px;
+}
+
+.pagination-button {
+	border: none;
+	background: none;
+	text-decoration: underline;
+}
+
+.pagination-button:hover:not(:disabled) {
+	cursor: pointer;
+	color: blue;
+}
+
+.pagination-button.active, .pagination-button.active:hover {
+	color: blue;
+	cursor: default;
+}
+
+.current-page {
+	width: 25px;
+}

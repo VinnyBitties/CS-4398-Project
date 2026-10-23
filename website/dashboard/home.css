@@ -1,9 +1,4 @@
 .page {
-	background: linear-gradient(
-		135deg,
-		#d99b20,
-		#ffe082
-	);
 	display: flex;
 	justify-content: center;
 }

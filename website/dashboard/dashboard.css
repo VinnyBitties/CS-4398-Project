@@ -2,6 +2,11 @@ body {
 	display: grid;
 	grid-template-columns: 1fr 19fr;
 	grid-template-rows: 100vh;
+	background: linear-gradient(
+		135deg,
+		#d99b20,
+		#ffe082
+	);
 }
 
 .sidebar {
