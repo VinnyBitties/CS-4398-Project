@@ -204,12 +204,12 @@
 	const coin = document.getElementById("main-coin");
 	const result = document.getElementById("result");
 	
-	const coin1 = document.getElementById("coin-step1");
+	/*const coin1 = document.getElementById("coin-step1");
 	const coin2 = document.getElementById("coin-step2");
 	const coin3 = document.getElementById("coin-step3");
 	const coin4 = document.getElementById("coin-step4");
 	const coin5 = document.getElementById("coin-step5");
-	const coin6 = document.getElementById("coin-step6");
+	const coin6 = document.getElementById("coin-step6");*/
 	
 	function stopSignal() {
 		if (!spinning) return;
@@ -235,18 +235,6 @@
 		}
 		coin.classList.add("landing");
 		coin.style.transform = `rotateY(${rotation}deg)`;
-		
-		coin6.classList.remove("spinning");
-		void coin6.offsetWidth;
-		
-		rotation += 360;
-		rotation = Math.ceil((rotation - 180) / 360) * 360 + 180;
-		
-		coin6.classList.add("landing");
-		coin6.style.transform = `rotateY(${rotation}deg)`;
-		
-		progressState6.classList.replace("running", "complete");
-		progressState6.textContent = "Complete";
 	}
 	
 	function startSignal() {
@@ -260,118 +248,40 @@
 		playSound();
 	}
 	
-	const progressState1 = document.getElementById("progress-state-step1");
-	const progressState2 = document.getElementById("progress-state-step2");
-	const progressState3 = document.getElementById("progress-state-step3");
-	const progressState4 = document.getElementById("progress-state-step4");
-	const progressState5 = document.getElementById("progress-state-step5");
-	const progressState6 = document.getElementById("progress-state-step6");
+	const progressState = [document.getElementById("progress-state-step1"), document.getElementById("progress-state-step2"),
+							document.getElementById("progress-state-step3"), document.getElementById("progress-state-step4"),
+							document.getElementById("progress-state-step5"), document.getElementById("progress-state-step6")];
 	
-	function startStep1() {
-		coin1.classList.add("spinning");
-		coin1.classList.remove("landing");
-		void coin1.offsetWidth;
-		
-		progressState1.classList.replace("waiting", "running");
-		progressState1.textContent = "Running";
+	const coins = [document.getElementById("coin-step1"), document.getElementById("coin-step2"), document.getElementById("coin-step3"),
+					document.getElementById("coin-step4"), document.getElementById("coin-step5"), document.getElementById("coin-step6")];
+	
+	if(progressState.length !== coins.length) {
+		alert("Inconsistent Steps");
+		throw new Error(`Inconsistent steps: ${progressState.length} ${coins.length}`);
 	}
 	
-	function startStep2() {
-		coin2.classList.add("spinning");
-		coin2.classList.remove("landing");
-		void coin2.offsetWidth;
+	function startStep(step) {
+		if(step < 1 || step > coins.length) return;
+		coins[step - 1].classList.add("spinning");
+		coins[step - 1].classList.remove("landing");
+		void coins[step - 1].offsetWidth;
 		
-		coin1.classList.remove("spinning");
-		void coin1.offsetWidth;
+		progressState[step - 1].classList.replace("waiting", "running");
+		progressState[step - 1].textContent = "Running";
+	}
+	
+	function endStep(step) {
+		coins[step - 1].classList.remove("spinning");
+		void coins[step - 1].offsetWidth;
 		
 		rotation += 360;
 		rotation = Math.ceil((rotation - 180) / 360) * 360 + 180;
 		
-		coin1.classList.add("landing");
-		coin1.style.transform = `rotateY(${rotation}deg)`;
+		coins[step - 1].classList.add("landing");
+		coins[step - 1].style.transform = `rotateY(${rotation}deg)`;
 		
-		progressState1.classList.replace("running", "complete");
-		progressState2.classList.replace("waiting", "running");
-		progressState1.textContent = "Complete";
-		progressState2.textContent = "Running";
-	}
-	
-	function startStep3() {
-		coin3.classList.add("spinning");
-		coin3.classList.remove("landing");
-		void coin3.offsetWidth;
-		
-		coin2.classList.remove("spinning");
-		void coin2.offsetWidth;
-		
-		rotation += 360;
-		rotation = Math.ceil((rotation - 180) / 360) * 360 + 180;
-		
-		coin2.classList.add("landing");
-		coin2.style.transform = `rotateY(${rotation}deg)`;
-		
-		progressState2.classList.replace("running", "complete");
-		progressState3.classList.replace("waiting", "running");
-		progressState2.textContent = "Complete";
-		progressState3.textContent = "Running";
-	}
-	
-	function startStep4() {
-		coin4.classList.add("spinning");
-		coin4.classList.remove("landing");
-		void coin4.offsetWidth;
-		
-		coin3.classList.remove("spinning");
-		void coin3.offsetWidth;
-		
-		rotation += 360;
-		rotation = Math.ceil((rotation - 180) / 360) * 360 + 180;
-		
-		coin3.classList.add("landing");
-		coin3.style.transform = `rotateY(${rotation}deg)`;
-		
-		progressState3.classList.replace("running", "complete");
-		progressState4.classList.replace("waiting", "running");
-		progressState3.textContent = "Complete";
-		progressState4.textContent = "Running";
-	}
-	
-	function startStep5() {
-		coin5.classList.add("spinning");
-		coin5.classList.remove("landing");
-		void coin5.offsetWidth;
-		
-		coin4.classList.remove("spinning");
-		void coin4.offsetWidth;
-		
-		rotation += 360;
-		rotation = Math.ceil((rotation - 180) / 360) * 360 + 180;
-		
-		coin4.classList.add("landing");
-		coin4.style.transform = `rotateY(${rotation}deg)`;
-		
-		progressState4.classList.replace("running", "complete");
-		progressState5.classList.replace("waiting", "running");
-	}
-	
-	function startStep6() {
-		coin6.classList.add("spinning");
-		coin6.classList.remove("landing");
-		void coin6.offsetWidth;
-		
-		coin5.classList.remove("spinning");
-		void coin5.offsetWidth;
-		
-		rotation += 360;
-		rotation = Math.ceil((rotation - 180) / 360) * 360 + 180;
-		
-		coin5.classList.add("landing");
-		coin5.style.transform = `rotateY(${rotation}deg)`;
-		
-		progressState5.classList.replace("running", "complete");
-		progressState6.classList.replace("waiting", "running");
-		progressState5.textContent = "Complete";
-		progressState6.textContent = "Running";
+		progressState[step - 1].classList.replace("running", "complete");
+		progressState[step - 1].textContent = "Complete";
 	}
 	
 	const coinSound = document.getElementById("coinFlip");
