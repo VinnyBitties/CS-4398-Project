@@ -66,10 +66,14 @@ The dashboard-facing contract for everything below is in
   in `docs/api-contract.md`, "Accounts and login".
 - **Dashboard pages** — served from `../website` at `http://localhost:3000/`,
   so the pages and the API share an origin and the login cookie works.
+- **Database** — `src/db.js`. The team's shared Azure PostgreSQL server when
+  `DATABASE_URL` is set, otherwise a local SQLite file. Same tables either
+  way; tables are created on first start. Setup, sharing and cost notes:
+  [`docs/azure-database.md`](docs/azure-database.md).
 - **Job queue** — implemented in `src/queue/jobQueue.js`. Scans run in the
   background, `JOB_CONCURRENCY` at a time (default 2), through
   `queued → running → completed | failed`. The queue is the `jobs` table in
-  SQLite rather than BullMQ + Redis: no extra service for teammates to
+  the database rather than BullMQ + Redis: no extra service for teammates to
   install, and jobs survive a restart (anything interrupted is re-queued at
   startup). It runs inside the one Node process, so it does not scale across
   machines; that is a deliberate trade for a capstone demo.
@@ -146,14 +150,23 @@ up as a failed `static_analysis` stage carrying the analyzer's own reason
 npm test
 ```
 
-43 tests across six files: the API end to end (`samples.test.js`), the job
-queue (`jobQueue.test.js`), the signature catalog (`catalog.test.js`), the
+56 tests across seven files: the API end to end (`samples.test.js`), login
+and sessions (`auth.test.js`), the job queue (`jobQueue.test.js`), the
+signature catalog (`catalog.test.js`), the
 HTTP stage runner (`httpStage.test.js`), the sandbox and behavioral ML stages
 against mock services (`sandboxStages.test.js`) and the real analyzer
 (`realAnalyzer.test.js`). All but the last run against the mock analyzer and
 an in-memory SQLite database, with no network access. The two real-analyzer
 tests are skipped unless `pefile` is installed for `python3`; they build an
 inert PE with the analyzer's own test helper, so no binary is committed.
+
+`npm test` ignores `DATABASE_URL` in `.env`, so it never writes to the shared
+Azure database. To run the same suite on PostgreSQL, point `TEST_DATABASE_URL`
+at a separate, disposable database (the suite empties its tables):
+
+```bash
+TEST_DATABASE_URL=postgres://user:pass@localhost:5432/sentinel_test TEST_DATABASE_SSL=false npm run test:pg
+```
 
 ## Next steps
 

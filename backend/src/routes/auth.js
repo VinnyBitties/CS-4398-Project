@@ -62,8 +62,8 @@ function readCredentials(req) {
   };
 }
 
-function signIn(res, user) {
-  setSessionCookie(res, users.createSession(user.id, config.sessionTtlHours));
+async function signIn(res, user) {
+  setSessionCookie(res, await users.createSession(user.id, config.sessionTtlHours));
 }
 
 // ---- routes ----------------------------------------------------------------
@@ -86,11 +86,11 @@ router.post("/auth/register", async (req, res, next) => {
     });
   }
   try {
-    const user = users.createUser(username, await hashPassword(password));
+    const user = await users.createUser(username, await hashPassword(password));
     if (!user) {
       return res.status(409).json({ error: "username_taken", message: "That username is already in use." });
     }
-    signIn(res, user);
+    await signIn(res, user);
     return res.status(201).json({ user });
   } catch (err) {
     return next(err);
@@ -107,7 +107,7 @@ router.post("/auth/login", async (req, res, next) => {
     return res.status(429).json({ error: "too_many_attempts", message: "Too many failed logins. Try again in 15 minutes." });
   }
   try {
-    const row = users.getUserByUsername(username);
+    const row = await users.getUserByUsername(username);
     const ok = row ? await verifyPassword(password, row.password_hash) : await verifyAgainstDummy(password);
     if (!ok) {
       recordFailure(key);
@@ -116,17 +116,21 @@ router.post("/auth/login", async (req, res, next) => {
     }
     failures.delete(key);
     const user = { id: row.id, username: row.username, created_at: row.created_at };
-    signIn(res, user);
+    await signIn(res, user);
     return res.json({ user });
   } catch (err) {
     return next(err);
   }
 });
 
-router.post("/auth/logout", (req, res) => {
-  users.deleteSession(sessionToken(req));
-  clearSessionCookie(res);
-  return res.status(204).end();
+router.post("/auth/logout", async (req, res, next) => {
+  try {
+    await users.deleteSession(sessionToken(req));
+    clearSessionCookie(res);
+    return res.status(204).end();
+  } catch (err) {
+    return next(err);
+  }
 });
 
 router.get("/auth/me", (req, res) => {

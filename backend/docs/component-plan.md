@@ -20,7 +20,7 @@ queue, pipeline orchestration, and historical scan records (FR01, FR02, FR08).
       SQLite `jobs` table; `src/pipeline/stages.js` is the worker interface a
       new stage plugs into. Uploads return `202` and are polled.
 - [x] [backend-03] Persist sample ID, filename, hash, and per-stage results
-      (`samples` + `results` tables, SQLite for dev). Telemetry reference and
+      (`samples` + `results` tables; shared Azure PostgreSQL, or SQLite locally). Telemetry reference and
       full report storage exist as a generic `report_json` column per stage.
 - [ ] [backend-04] Wire the static ML stage (FR03) into the pipeline once it
       exists -- not started by any team member yet as of this writing.

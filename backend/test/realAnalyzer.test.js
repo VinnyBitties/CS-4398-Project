@@ -1,5 +1,7 @@
 "use strict";
 
+const { resetDb } = require("./helpers/testDb");
+
 // Runs the backend against the team's REAL static analyzer
 // (malware_detection/analyze.py) instead of the mock. Skipped automatically
 // when pefile is not installed for python3, so `npm test` still passes on a
@@ -17,7 +19,6 @@ const python = process.env.PYTHON_PATH || "python3";
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "sentinel-real-"));
 
 process.env.ANALYZER_SCRIPT_PATH = path.join(analyzerDir, "analyze.py");
-process.env.DATABASE_PATH = ":memory:";
 process.env.UPLOAD_DIR = path.join(tmp, "uploads");
 
 const test = require("node:test");

@@ -1,5 +1,7 @@
 "use strict";
 
+const { resetDb } = require("./helpers/testDb");
+
 // Run with: npm test  (after `npm install`)
 // Uses the mock analyzer (scripts/mock_analyze.py) so these tests don't
 // depend on the real malware_detection branch being merged in yet.
@@ -9,7 +11,6 @@ const fs = require("node:fs");
 const os = require("node:os");
 
 process.env.ANALYZER_SCRIPT_PATH = path.join(__dirname, "..", "scripts", "mock_analyze.py");
-process.env.DATABASE_PATH = ":memory:";
 process.env.UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "sentinel-uploads-"));
 
 const test = require("node:test");
@@ -18,6 +19,8 @@ const request = require("supertest");
 const { createApp } = require("../src/app");
 
 const app = createApp();
+
+test.before(resetDb);
 const fixture = path.join(__dirname, "fixtures", "sample.bin");
 
 // The EICAR antivirus test string, assembled at runtime. It is deliberately

@@ -6,8 +6,9 @@ const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
 
+const { resetDb } = require("./helpers/testDb");
+
 process.env.ANALYZER_SCRIPT_PATH = path.join(__dirname, "..", "scripts", "mock_analyze.py");
-process.env.DATABASE_PATH = ":memory:";
 process.env.UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "sentinel-uploads-"));
 process.env.MAX_FAILED_LOGINS = "3";
 process.env.CORS_ORIGINS = "http://localhost:5500";
@@ -20,6 +21,8 @@ const db = require("../src/db");
 const authRoutes = require("../src/routes/auth");
 
 const app = createApp();
+
+test.before(resetDb);
 const fixture = path.join(__dirname, "fixtures", "sample.bin");
 
 let n = 0;
@@ -56,14 +59,14 @@ test("register creates an account, signs in, and never returns the hash", async 
 
 test("passwords and session tokens are stored hashed", async () => {
   const { username, password } = await registered();
-  const row = db.prepare("SELECT password_hash FROM users WHERE username = ?").get(username);
+  const row = await db.get("SELECT password_hash FROM users WHERE username = ?", [username]);
   assert.match(row.password_hash, /^scrypt\$/);
   assert.ok(!row.password_hash.includes(password));
 
   const agent = request.agent(app);
   const res = await agent.post("/api/auth/login").send({ username, password });
   const token = decodeURIComponent(/sentinel_session=([^;]+)/.exec(res.headers["set-cookie"][0])[1]);
-  const stored = db.prepare("SELECT COUNT(*) AS n FROM sessions WHERE token_hash = ?").get(token).n;
+  const stored = Number((await db.get("SELECT COUNT(*) AS n FROM sessions WHERE token_hash = ?", [token])).n);
   assert.equal(stored, 0, "raw token must not be in the database");
 });
 
@@ -123,7 +126,7 @@ test("logout ends the session", async () => {
 
 test("an expired session is not accepted", async () => {
   const { agent, user } = await registered();
-  db.prepare("UPDATE sessions SET expires_at = '2000-01-01T00:00:00.000Z' WHERE user_id = ?").run(user.id);
+  await db.run("UPDATE sessions SET expires_at = '2000-01-01T00:00:00.000Z' WHERE user_id = ?", [user.id]);
   assert.equal((await agent.get("/api/auth/me")).status, 401);
 });
 

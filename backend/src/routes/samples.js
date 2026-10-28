@@ -54,7 +54,7 @@ async function respondWithSubmission(req, res, { sampleId, jobId }) {
   queue.enqueue();
   const finished = wantsWait(req) ? await queue.waitFor(jobId) : false;
   res.location(`/api/samples/${sampleId}`);
-  return res.status(finished ? 201 : 202).json(store.getSampleView(sampleId));
+  return res.status(finished ? 201 : 202).json(await store.getSampleView(sampleId));
 }
 
 // POST /api/samples  (multipart/form-data, field name: "file")
@@ -66,7 +66,7 @@ router.post("/samples", upload.single("file"), async (req, res, next) => {
     // Hashed here, not taken from the analyzer, so the hash and the
     // signature lookup never depend on a Python process being healthy.
     const sha256 = await sha256OfFile(req.file.path);
-    const ids = store.createFileSample({
+    const ids = await store.createFileSample({
       sha256,
       originalFilename: req.file.originalname,
       fileSize: req.file.size,
@@ -103,7 +103,8 @@ router.post("/links", async (req, res, next) => {
   }
   try {
     const sha256 = crypto.createHash("sha256").update(url).digest("hex");
-    return await respondWithSubmission(req, res, store.createLinkSample({ sha256, url, userId: req.user ? req.user.id : null }));
+    const ids = await store.createLinkSample({ sha256, url, userId: req.user ? req.user.id : null });
+    return await respondWithSubmission(req, res, ids);
   } catch (err) {
     return next(err);
   }
@@ -111,22 +112,31 @@ router.post("/links", async (req, res, next) => {
 
 // GET /api/samples?limit=20&offset=0  -- scan history, newest first (FR08)
 // Signed in: your own scans. Not signed in: scans submitted as a guest.
-router.get("/samples", (req, res) => {
+router.get("/samples", async (req, res, next) => {
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
   const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
-  return res.json(store.listSampleViews({ limit, offset, userId: req.user ? req.user.id : null }));
+  try {
+    return res.json(await store.listSampleViews({ limit, offset, userId: req.user ? req.user.id : null }));
+  } catch (err) {
+    return next(err);
+  }
 });
 
 // GET /api/samples/:id  -- 404 (not 403) for someone else's scan, so ids
 // can't be probed to learn which ones exist.
-router.get("/samples/:id", (req, res) => {
-  const id = /^\d+$/.test(req.params.id) ? Number(req.params.id) : null;
-  const allowed = id !== null && store.canView(store.getSampleRow(id), req.user ? req.user.id : null);
-  const view = allowed ? store.getSampleView(id) : null;
-  if (!view) {
-    return res.status(404).json({ error: "not_found" });
+router.get("/samples/:id", async (req, res, next) => {
+  try {
+    // Ids beyond 32 bits can't exist; checking avoids a PostgreSQL range error.
+    const id = /^\d{1,9}$/.test(req.params.id) ? Number(req.params.id) : null;
+    const allowed = id !== null && store.canView(await store.getSampleRow(id), req.user ? req.user.id : null);
+    const view = allowed ? await store.getSampleView(id) : null;
+    if (!view) {
+      return res.status(404).json({ error: "not_found" });
+    }
+    return res.json(view);
+  } catch (err) {
+    return next(err);
   }
-  return res.json(view);
 });
 
 module.exports = router;

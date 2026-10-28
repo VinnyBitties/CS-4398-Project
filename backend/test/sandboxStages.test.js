@@ -4,7 +4,7 @@
 // return exactly what dynamic_telemetry/api.py and ML/predict.py --serve
 // return. No VM, no Python, no network.
 
-process.env.DATABASE_PATH = ":memory:";
+const { resetDb } = require("./helpers/testDb");
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -15,6 +15,8 @@ const { runPipeline } = require("../src/pipeline/runPipeline");
 const { createSandboxStage, createBehavioralMlStage } = require("../src/pipeline/stages");
 const { detonate } = require("../src/stages/sandboxClient");
 const { toMlReport, SandboxReportError } = require("../src/adapters/sandboxToMl");
+
+test.before(resetDb);
 
 const fixture = path.join(__dirname, "fixtures", "sample.bin");
 
@@ -196,9 +198,9 @@ test("detonations never overlap, because the sandbox has one VM", async () => {
 // ---- pipeline -------------------------------------------------------------
 
 let n = 0;
-function newFileSample() {
+async function newFileSample() {
   n += 1;
-  const { sampleId } = store.createFileSample({
+  const { sampleId } = await store.createFileSample({
     sha256: String(n).padStart(64, "a"),
     originalFilename: "a.exe",
     fileSize: 10,
@@ -207,8 +209,8 @@ function newFileSample() {
   return sampleId;
 }
 
-function resultsByStage(sampleId) {
-  return Object.fromEntries(store.getSampleView(sampleId).results.map((r) => [r.stage, r]));
+async function resultsByStage(sampleId) {
+  return Object.fromEntries((await store.getSampleView(sampleId)).results.map((r) => [r.stage, r]));
 }
 
 test("pipeline: sandbox telemetry is translated and scored by the ML service", async () => {
@@ -222,13 +224,13 @@ test("pipeline: sandbox telemetry is translated and scored by the ML service", a
     json(res, 200, { malicious: true, risk_score: 0.71, risk_level: "high", features: {}, evidence: ["2 DNS request(s) observed"] });
   });
   try {
-    const sampleId = newFileSample();
+    const sampleId = await newFileSample();
     await runPipeline(sampleId, [
       createSandboxStage({ url: `${sandbox.url}/detonate`, detonationSeconds: 15, timeoutMs: 5000 }),
       createBehavioralMlStage({ url: `${ml.url}/`, timeoutMs: 5000 }),
     ]);
 
-    const r = resultsByStage(sampleId);
+    const r = await resultsByStage(sampleId);
     assert.equal(r.sandbox.status, "complete");
     assert.equal(r.sandbox.report.job_id, sandboxResponse().job_id);
     assert.equal(r.behavioral_ml.status, "complete");
@@ -258,13 +260,13 @@ test("pipeline: an empty Sysmon log fails the sandbox stage and is never scored"
     json(res, 200, {});
   });
   try {
-    const sampleId = newFileSample();
+    const sampleId = await newFileSample();
     await runPipeline(sampleId, [
       createSandboxStage({ url: `${sandbox.url}/detonate`, timeoutMs: 5000 }),
       createBehavioralMlStage({ url: `${ml.url}/`, timeoutMs: 5000 }),
     ]);
 
-    const r = resultsByStage(sampleId);
+    const r = await resultsByStage(sampleId);
     assert.equal(r.sandbox.status, "failed");
     assert.equal(r.sandbox.error.code, "TELEMETRY_PARSE_ERROR");
     assert.equal(r.behavioral_ml.status, "failed");
@@ -282,12 +284,12 @@ test("pipeline: the ML service being down fails only behavioral_ml", async () =>
     json(res, 200, sandboxResponse());
   });
   try {
-    const sampleId = newFileSample();
+    const sampleId = await newFileSample();
     await runPipeline(sampleId, [
       createSandboxStage({ url: `${sandbox.url}/detonate`, timeoutMs: 5000 }),
       createBehavioralMlStage({ url: "http://127.0.0.1:1/", timeoutMs: 1000 }),
     ]);
-    const r = resultsByStage(sampleId);
+    const r = await resultsByStage(sampleId);
     assert.equal(r.sandbox.status, "complete");
     assert.equal(r.behavioral_ml.status, "failed");
     assert.equal(r.behavioral_ml.error.code, "CONNECTION_FAILED");

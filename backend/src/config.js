@@ -7,6 +7,7 @@ try {
 } catch (_) {
   /* dotenv not installed yet -- ignore, real env vars still work */
 }
+const os = require("node:os");
 const path = require("node:path");
 
 function resolveFromRoot(p) {
@@ -20,7 +21,21 @@ const config = {
     process.env.ANALYZER_SCRIPT_PATH || "./scripts/mock_analyze.py"
   ),
   uploadDir: resolveFromRoot(process.env.UPLOAD_DIR || "./uploads"),
+  // Where scans, reports and accounts are stored (src/db.js).
+  //   DATABASE_URL set   -> that PostgreSQL server (the team's Azure database)
+  //   DATABASE_URL empty -> a local SQLite file at DATABASE_PATH
+  databaseUrl: process.env.DATABASE_URL || "",
+  // TLS for PostgreSQL. Azure requires it; set DATABASE_SSL=false only for a
+  // Postgres running on your own machine.
+  databaseSsl: !["0", "false", "no"].includes(String(process.env.DATABASE_SSL || "true").toLowerCase()),
+  // Connections this backend keeps open to PostgreSQL. Each teammate's
+  // backend opens its own, so keep it small on Azure's smallest tier.
+  databasePoolSize: parseInt(process.env.DATABASE_POOL_SIZE || "5", 10),
   databasePath: process.env.DATABASE_PATH === ":memory:" ? ":memory:" : resolveFromRoot(process.env.DATABASE_PATH || "./data/sentinel.db"),
+  // Which backend owns a scan job. Uploaded files live on the disk of the
+  // backend that received them, so with a shared database each backend only
+  // runs its own jobs. Defaults to this computer's name plus the port.
+  workerId: process.env.WORKER_ID || `${os.hostname()}:${process.env.PORT || "3000"}`,
   maxUploadBytes: parseInt(process.env.MAX_UPLOAD_BYTES || "26214400", 10), // 25 MiB
   analyzerTimeoutMs: parseInt(process.env.ANALYZER_TIMEOUT_MS || "15000", 10),
   // Analyzer report contract versions (malware_detection/REPORT_CONTRACT.md)

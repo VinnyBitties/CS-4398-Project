@@ -14,40 +14,39 @@ const { stages: defaultStages } = require("./stages");
  * database), which the queue records as a failed job.
  */
 async function runPipeline(sampleId, stages = defaultStages) {
-  const sample = store.getSampleRow(sampleId);
+  const sample = await store.getSampleRow(sampleId);
   if (!sample) throw new Error(`Sample ${sampleId} does not exist`);
 
   // A retried job (server restarted mid-scan) starts its stages over.
-  store.stmts.deleteRunningResults.run(sample.id);
+  await store.deleteRunningResults(sample.id);
 
   const ctx = { reports: {} };
   for (const stage of stages) {
     if (!stage.appliesTo.includes(sample.submission_type)) continue;
 
-    const resultId = store.stmts.startResult.run(sample.id, stage.name).lastInsertRowid;
+    const resultId = await store.startResult(sample.id, stage.name);
+    let outcome;
     try {
       const out = (await stage.run(sample, ctx)) || {};
       ctx.reports[stage.name] = out.report ?? null;
-      store.stmts.finishResult.run(
-        "complete",
-        typeof out.signatureMatch === "boolean" ? Number(out.signatureMatch) : null,
-        out.report === undefined ? null : JSON.stringify(out.report),
-        null,
-        resultId
-      );
+      outcome = {
+        status: "complete",
+        signatureMatch: typeof out.signatureMatch === "boolean" ? Number(out.signatureMatch) : null,
+        reportJson: out.report === undefined ? null : JSON.stringify(out.report),
+      };
     } catch (err) {
-      store.stmts.finishResult.run(
-        "failed",
-        null,
-        null,
-        JSON.stringify({
+      outcome = {
+        status: "failed",
+        errorMessage: JSON.stringify({
           code: err.code || "STAGE_ERROR",
           message: err.message,
           details: err.details || null,
         }),
-        resultId
-      );
+      };
     }
+    // Outside the try: a database error here is not the stage's fault, and
+    // should fail the job rather than be recorded as a stage failure.
+    await store.finishResult(resultId, outcome);
   }
 }
 

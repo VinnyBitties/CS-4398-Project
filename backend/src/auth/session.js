@@ -50,9 +50,13 @@ function sessionToken(req) {
 }
 
 /** Runs on every /api request. Never rejects: guests get req.user = null. */
-function loadUser(req, res, next) {
-  req.user = users.getUserForToken(sessionToken(req));
-  next();
+async function loadUser(req, res, next) {
+  try {
+    req.user = await users.getUserForToken(sessionToken(req));
+    return next();
+  } catch (err) {
+    return next(err);
+  }
 }
 
 /** For routes that need a signed-in user. */
