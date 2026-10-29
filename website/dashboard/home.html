@@ -120,13 +120,14 @@
 			</div>
 			<div class="progress-container" id="progressContent">
 				<h2>Progress: <span id="inspecting"></span></h2>
+				<div id="scan-message"></div>
 				<div class="progress-step">
 					<div class="coin" id="coin-step1">
 						<div class="side heads">H</div>
 						<div class="side tails">T</div>
 					</div>
 					<div class="progress-step-content">
-						<div class="progress-type">1. Signiturte</div>
+						<div class="progress-type">1. Signature</div>
 						<div class="progress-state waiting" id="progress-state-step1">Waiting</div>
 					</div>
 				</div>
@@ -189,6 +190,9 @@
 						<div class="progress-type">6. Report</div>
 						<div class="progress-state waiting" id="progress-state-step6">Waiting</div>
 					</div>
+				</div>
+				<div class="scan-again-container">
+					<button id="scan-again" onclick="resetScan()">Scan another</button>
 				</div>
 			</div>
 		</div>
@@ -343,22 +347,167 @@
 	const progressContent = document.getElementById("progressContent");
 	const inspecting = document.getElementById("inspecting");
 	
-	function sendOff() {
-		if(submitValue == null) {
-			return;
-		} else if(typeof submitValue === "string") {
-			console.log("submit link");
-			submitContent.style.display = "none";
-			progressContent.style.display = "block";
-			startSignal();
-			inspecting.textContent = submitValue;
-		} else if(submitValue instanceof File && submitValue.name.split(".").pop() === "exe") {
-			console.log("submit exe");
-			submitContent.style.display = "none";
-			progressContent.style.display = "block";
-			startSignal();
-			inspecting.textContent = submitValue.name;
+	const scanMessage = document.getElementById("scan-message");
+	const scanAgain = document.getElementById("scan-again");
+
+	// Backend pipeline stage -> progress step (1-based), in pipeline order.
+	const STAGE_STEPS = {
+		signature: 1,
+		static_analysis: 2,
+		static_ml: 3,
+		sandbox: 4,
+		behavioral_ml: 5,
+		llm: 6,
+	};
+	const POLL_MS = 1500;
+
+	let scanning = false;
+	let pollTimer = null;
+	let stepShown = []; // what each step currently shows: waiting | running | complete | failed | skipped
+
+	function setStepLabel(step, state, text) {
+		const el = progressState[step - 1];
+		el.classList.remove("waiting", "running", "complete", "failed", "skipped");
+		el.classList.add(state);
+		el.textContent = text;
+		stepShown[step - 1] = state;
+	}
+
+	function failStep(step, message) {
+		coins[step - 1].classList.remove("spinning");
+		setStepLabel(step, "failed", "Failed" + (message ? ": " + message : ""));
+	}
+
+	// Move each step's coin and label to match the stage results so far.
+	function showResults(results) {
+		for (const r of results) {
+			const step = STAGE_STEPS[r.stage];
+			if (!step) continue;
+			const shown = stepShown[step - 1];
+			if (r.status === "running" && shown === "waiting") {
+				startStep(step);
+				stepShown[step - 1] = "running";
+			} else if (r.status === "complete" && shown !== "complete") {
+				if (shown === "waiting") startStep(step);
+				endStep(step);
+				stepShown[step - 1] = "complete";
+			} else if (r.status === "failed" && shown !== "failed") {
+				failStep(step, r.error && r.error.message);
+			}
 		}
+	}
+
+	// One line summing up what the finished stages found.
+	function summarize(sample) {
+		const find = (name) => sample.results.find((r) => r.stage === name && r.status === "complete");
+		const lines = [];
+		if (sample.signature_match === true) {
+			const sig = find("signature");
+			const match = sig && sig.report && sig.report.match;
+			lines.push("Known malicious signature matched" + (match && match.name ? " (" + match.name + ")" : "") + ".");
+		} else if (sample.signature_match === false) {
+			lines.push("No known signature matched.");
+		}
+		const ml = find("behavioral_ml");
+		if (ml && ml.report) {
+			const level = ml.report.risk_level || (ml.report.malicious ? "malicious" : "benign");
+			const score = typeof ml.report.risk_score === "number" ? " (score " + ml.report.risk_score + ")" : "";
+			lines.push("Behavioral risk: " + level + score + ".");
+		}
+		return lines.join(" ");
+	}
+
+	function finishScan(sample, errorText) {
+		clearTimeout(pollTimer);
+		scanning = false;
+		stopSignal();
+		// Stages that never ran (planned, or turned off on the server).
+		for (let step = 1; step <= coins.length; step++) {
+			if (stepShown[step - 1] === "waiting" || stepShown[step - 1] === "running") {
+				coins[step - 1].classList.remove("spinning");
+				setStepLabel(step, "skipped", errorText ? "Not run" : "Skipped");
+			}
+		}
+		scanMessage.className = errorText ? "error" : "";
+		scanMessage.textContent = errorText || (sample ? summarize(sample) : "");
+		scanAgain.style.display = "inline-block";
+	}
+
+	async function poll(sampleId) {
+		const res = await scans.get(sampleId);
+		if (!scanning) return;
+		if (!res.ok) {
+			// A network blip: keep trying. Anything else ends the scan view.
+			if (res.status === 0) {
+				pollTimer = setTimeout(() => poll(sampleId), POLL_MS * 2);
+				return;
+			}
+			finishScan(null, errorMessage(res, "Lost track of the scan."));
+			return;
+		}
+		const sample = res.data;
+		showResults(sample.results);
+		if (sample.status === "completed") {
+			finishScan(sample);
+		} else if (sample.status === "failed") {
+			finishScan(sample, "The scan stopped with an error" + (sample.job && sample.job.error ? ": " + sample.job.error : "."));
+		} else {
+			pollTimer = setTimeout(() => poll(sampleId), POLL_MS);
+		}
+	}
+
+	async function sendOff() {
+		if (scanning || submitValue == null) return;
+
+		let request;
+		if (typeof submitValue === "string") {
+			const url = submitValue.trim();
+			if (url === "") return;
+			inspecting.textContent = url;
+			request = () => scans.submitLink(url);
+		} else if (submitValue instanceof File && submitValue.name.toLowerCase().endsWith(".exe")) {
+			const file = submitValue;
+			inspecting.textContent = file.name;
+			request = () => scans.submitFile(file);
+		} else {
+			return;
+		}
+
+		scanning = true;
+		stepShown = coins.map(() => "waiting");
+		scanMessage.className = "";
+		scanMessage.textContent = "Submitting...";
+		scanAgain.style.display = "none";
+		submitContent.style.display = "none";
+		progressContent.style.display = "block";
+		startSignal();
+
+		const res = await request();
+		if (!res.ok) {
+			finishScan(null, errorMessage(res, "The server did not accept the submission."));
+			return;
+		}
+		scanMessage.textContent = "Scanning...";
+		showResults(res.data.results || []);
+		poll(res.data.sample_id);
+	}
+
+	// Back to the upload form, with every step reset to Waiting.
+	function resetScan() {
+		clearTimeout(pollTimer);
+		scanning = false;
+		for (let step = 1; step <= coins.length; step++) {
+			coins[step - 1].classList.remove("spinning", "landing");
+			coins[step - 1].style.transform = "";
+			setStepLabel(step, "waiting", "Waiting");
+		}
+		scanMessage.textContent = "";
+		submitValue = null;
+		fileInput.value = "";
+		linkValue.value = "";
+		dropZoneText.textContent = "Click or drop to upload.";
+		progressContent.style.display = "none";
+		submitContent.style.display = "";
 	}
 	</script>
 	<script src="../api.js"></script>

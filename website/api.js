@@ -10,9 +10,12 @@ const API_BASE =
 
 // fetch() wrapper: sends JSON, always includes the session cookie, and
 // returns { ok, status, data } instead of throwing on HTTP errors.
-async function api(path, { method = "GET", body } = {}) {
+async function api(path, { method = "GET", body, form } = {}) {
 	const options = { method, credentials: "include", headers: {} };
-	if (body !== undefined) {
+	if (form !== undefined) {
+		// FormData sets its own multipart Content-Type with the boundary.
+		options.body = form;
+	} else if (body !== undefined) {
 		options.headers["Content-Type"] = "application/json";
 		options.body = JSON.stringify(body);
 	}
@@ -36,6 +39,18 @@ const auth = {
 		const res = await api("/auth/me");
 		return res.ok && res.data ? res.data.user : null;
 	},
+};
+
+// Scans (see backend/docs/api-contract.md). Each returns { ok, status, data }
+// where data is the sample object: { sample_id, status, results[], ... }.
+const scans = {
+	submitFile(file) {
+		const form = new FormData();
+		form.append("file", file);
+		return api("/samples", { method: "POST", form });
+	},
+	submitLink: (url) => api("/links", { method: "POST", body: { url } }),
+	get: (id) => api("/samples/" + encodeURIComponent(id)),
 };
 
 function errorMessage(res, fallback) {
