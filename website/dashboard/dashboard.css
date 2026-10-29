@@ -35,6 +35,19 @@ body {
 	color: white;
 }
 
+.account {
+	margin-top: 20px;
+	padding-top: 12px;
+	border-top: 1px solid #444;
+	font-size: 13px;
+}
+
+.account-name {
+	color: #aaa;
+	padding: 0 12px 4px;
+	overflow-wrap: anywhere;
+}
+
 #here {
 	color: grey;
 	background: #222;

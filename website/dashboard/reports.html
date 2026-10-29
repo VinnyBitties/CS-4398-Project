@@ -12,6 +12,7 @@
 	<nav class="sidebar">
 		<a href="home.html">Home</a>
 		<a id="here">Reports</a>
+		<div class="account" id="account"></div>
 	</nav>
 	<div class="page">
 		<div class="reports-container">
@@ -133,5 +134,7 @@
 	}
 	displayItems();
 	</script>
+	<script src="../api.js"></script>
+	<script>renderAccount("account", "../index.html");</script>
 </body>
 </html>

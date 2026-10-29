@@ -31,18 +31,19 @@
 	<div id="popup" class="popup-overlay">
 		<div class="popup-content">
 			<h2 class="popup-title">Create Account</h2>
-			<form>
+			<form id="signupForm">
+				<div id="signupstatus"></div>
 				<div class="popup-input">
 					<div>Username:</div>
-					<input type="text" required>
+					<input type="text" id="newUsername" autocomplete="username" required>
 				</div>
 				<div class="popup-input">
 					<div>Password:</div>
-					<input type="password" required>
+					<input type="password" id="newPassword" autocomplete="new-password" minlength="8" required>
 				</div>
 				<div class="popup-input">
 					<div>Confirm Password:</div>
-					<input type="password" required>
+					<input type="password" id="confirmPassword" autocomplete="new-password" required>
 				</div>
 				<div class="popup-buttons">
 					<button type="submit" class="btn-submit">Sign Up</button>
@@ -52,25 +53,75 @@
 		</div>
 	</div>
 	
+	<script src="api.js"></script>
 	<script>
-	function submitInfo() {
-		const username = document.getElementById("username").value;
+	const DASHBOARD = "dashboard/home.html";
+	const loginStatus = document.getElementById("loginstatus");
+	const signupStatus = document.getElementById("signupstatus");
+	const loginButton = document.querySelector(".submit");
+
+	// Already signed in? Skip straight to the dashboard.
+	auth.currentUser().then((user) => {
+		if (user) window.location.href = DASHBOARD;
+	});
+
+	async function submitInfo() {
+		const username = document.getElementById("username").value.trim();
 		const password = document.getElementById("password").value;
+		if (username === "" || password === "") {
+			loginStatus.textContent = "Username and password must be filled out.";
+			return;
+		}
+		loginButton.disabled = true;
+		loginStatus.textContent = "";
+		const res = await auth.login(username, password);
+		loginButton.disabled = false;
 		document.getElementById("password").value = "";
-		if(username === "" || password ==="") {
-			const status = document.getElementById("loginstatus");
-			status.textContent = "Username and password must be filled out.";
-		} else window.location.href="dashboard/home.html?login=1"
+		if (res.ok) {
+			window.location.href = DASHBOARD;
+		} else {
+			loginStatus.textContent = errorMessage(res, "Login failed.");
+		}
 	}
-	
+
+	// Enter in either field logs in.
+	for (const id of ["username", "password"]) {
+		document.getElementById(id).addEventListener("keydown", (e) => {
+			if (e.key === "Enter") submitInfo();
+		});
+	}
+
 	document.getElementById("accountCreator").addEventListener("click", function(e) {
 		e.preventDefault();
+		signupStatus.textContent = "";
 		document.getElementById("popup").style.display = "grid";
 	});
-	
+
 	function closePopup() {
 		document.getElementById("popup").style.display = "none";
 	}
+
+	// Create account: registering also signs the new user in.
+	document.getElementById("signupForm").addEventListener("submit", async (e) => {
+		e.preventDefault();
+		const username = document.getElementById("newUsername").value.trim();
+		const password = document.getElementById("newPassword").value;
+		const confirm = document.getElementById("confirmPassword").value;
+		if (password !== confirm) {
+			signupStatus.textContent = "Passwords do not match.";
+			return;
+		}
+		const button = e.target.querySelector(".btn-submit");
+		button.disabled = true;
+		signupStatus.textContent = "";
+		const res = await auth.register(username, password);
+		button.disabled = false;
+		if (res.ok) {
+			window.location.href = DASHBOARD;
+		} else {
+			signupStatus.textContent = errorMessage(res, "Could not create the account.");
+		}
+	});
 	</script>
 </body>
 </html>

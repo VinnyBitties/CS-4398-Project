@@ -86,15 +86,11 @@
 	</style>
 </head>
 <body>
-	<script>
-	/*const params = new URLSearchParams(window.location.search);
-	const loginstatus = params.get("login");
-	console.log("login status: " + loginstatus);*/
-	</script>
 	
 	<nav class="sidebar">
 		<a id="here">Home</a>
 		<a href="reports.html">Reports</a>
+		<div class="account" id="account"></div>
 	</nav>
 	<audio src="coin-flip.mp3" id="coinFlip"></audio>
 	<div class="page">
@@ -365,5 +361,7 @@
 		}
 	}
 	</script>
+	<script src="../api.js"></script>
+	<script>renderAccount("account", "../index.html");</script>
 </body>
 </html>

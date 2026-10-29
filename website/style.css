@@ -78,11 +78,16 @@ body {
 	font-size: 12px;
 }
 
-#loginstatus {
+#loginstatus, #signupstatus {
 	text-align: center;
 	color: red;
 	min-height: 15px;
 	font-size: 12px;
+}
+
+.submit:disabled, .btn-submit:disabled {
+	opacity: 0.6;
+	cursor: wait;
 }
 
 .popup-overlay {
