@@ -61,6 +61,28 @@ const config = {
   // the shape the ML service expects.
   behavioralMlUrl: process.env.BEHAVIORAL_ML_URL || "http://127.0.0.1:8000/",
   behavioralMlTimeoutMs: parseInt(process.env.BEHAVIORAL_ML_TIMEOUT_MS || "15000", 10),
+
+  // Accounts and sessions (src/auth, src/routes/auth.js).
+  // How long a login lasts before the user has to sign in again.
+  sessionTtlHours: parseInt(process.env.SESSION_TTL_HOURS || "168", 10), // 7 days
+  // Mark the session cookie Secure (HTTPS only). Leave false for local
+  // http://localhost development; set true once the site is served over HTTPS.
+  cookieSecure: ["1", "true", "yes"].includes(String(process.env.COOKIE_SECURE || "").toLowerCase()),
+  // Set false to stop new sign-ups (existing accounts can still log in).
+  allowRegistration: !["0", "false", "no"].includes(String(process.env.ALLOW_REGISTRATION || "true").toLowerCase()),
+  // Failed logins allowed per username + IP before a 15-minute lockout.
+  maxFailedLogins: parseInt(process.env.MAX_FAILED_LOGINS || "10", 10),
+
+  // The dashboard (website/). The backend serves it, so the pages and the
+  // API share one origin and the session cookie just works. Set to an empty
+  // string to turn this off.
+  websiteDir: process.env.WEBSITE_DIR === "" ? "" : resolveFromRoot(process.env.WEBSITE_DIR || "../website"),
+  // Other origins allowed to call the API with the session cookie, for when
+  // the pages are served separately (e.g. VS Code Live Server on :5500).
+  corsOrigins: (process.env.CORS_ORIGINS || "http://localhost:5500,http://127.0.0.1:5500")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean),
 };
 
 module.exports = config;

@@ -58,7 +58,14 @@ The dashboard-facing contract for everything below is in
 - `GET /api/samples/:id` — implemented; a sample, its job status and every
   stage result so far.
 - `GET /api/samples?limit=&offset=` — implemented; scan history, newest
-  first.
+  first. Scoped to the signed-in user (guests see guest scans).
+- **Login** — `POST /api/auth/register`, `POST /api/auth/login`,
+  `POST /api/auth/logout`, `GET /api/auth/me`. Passwords are hashed with
+  scrypt; the session is an HttpOnly cookie whose token is stored only as a
+  SHA-256 (`users` and `sessions` tables). Signing in is optional. Details
+  in `docs/api-contract.md`, "Accounts and login".
+- **Dashboard pages** — served from `../website` at `http://localhost:3000/`,
+  so the pages and the API share an origin and the login cookie works.
 - **Job queue** — implemented in `src/queue/jobQueue.js`. Scans run in the
   background, `JOB_CONCURRENCY` at a time (default 2), through
   `queued → running → completed | failed`. The queue is the `jobs` table in
@@ -103,6 +110,10 @@ The dashboard-facing contract for everything below is in
 curl -F "file=@package.json" "http://localhost:3000/api/samples?wait=true"
 curl -H "Content-Type: application/json" -d '{"url":"http://malware.wicar.org/"}' "http://localhost:3000/api/links?wait=true"
 curl "http://localhost:3000/api/samples"
+
+# Log in with a cookie jar, then scan as that user
+curl -c jar.txt -H "Content-Type: application/json" -d '{"username":"demo","password":"demo-pass-1"}' http://localhost:3000/api/auth/register
+curl -b jar.txt http://localhost:3000/api/auth/me
 ```
 
 ## Switching from the mock analyzer to the real one
@@ -155,5 +166,5 @@ inert PE with the analyzer's own test helper, so no binary is committed.
    once `/detonate` returns real telemetry, and agree one telemetry shape with
    Dynamic Analysis and ML so the adapter can be removed.
 4. Choose a real signature feed and point `SIGNATURE_HASHLIST_PATH` at it.
-5. Decide on authentication and CORS before the API is reachable from
+5. Decide whether scanning should require an account before the API is reachable from
    anywhere but localhost.

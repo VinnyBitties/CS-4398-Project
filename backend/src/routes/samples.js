@@ -71,6 +71,7 @@ router.post("/samples", upload.single("file"), async (req, res, next) => {
       originalFilename: req.file.originalname,
       fileSize: req.file.size,
       storedPath: req.file.path,
+      userId: req.user ? req.user.id : null,
     });
     return await respondWithSubmission(req, res, ids);
   } catch (err) {
@@ -102,22 +103,26 @@ router.post("/links", async (req, res, next) => {
   }
   try {
     const sha256 = crypto.createHash("sha256").update(url).digest("hex");
-    return await respondWithSubmission(req, res, store.createLinkSample({ sha256, url }));
+    return await respondWithSubmission(req, res, store.createLinkSample({ sha256, url, userId: req.user ? req.user.id : null }));
   } catch (err) {
     return next(err);
   }
 });
 
 // GET /api/samples?limit=20&offset=0  -- scan history, newest first (FR08)
+// Signed in: your own scans. Not signed in: scans submitted as a guest.
 router.get("/samples", (req, res) => {
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
   const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
-  return res.json(store.listSampleViews({ limit, offset }));
+  return res.json(store.listSampleViews({ limit, offset, userId: req.user ? req.user.id : null }));
 });
 
-// GET /api/samples/:id
+// GET /api/samples/:id  -- 404 (not 403) for someone else's scan, so ids
+// can't be probed to learn which ones exist.
 router.get("/samples/:id", (req, res) => {
-  const view = /^\d+$/.test(req.params.id) ? store.getSampleView(Number(req.params.id)) : null;
+  const id = /^\d+$/.test(req.params.id) ? Number(req.params.id) : null;
+  const allowed = id !== null && store.canView(store.getSampleRow(id), req.user ? req.user.id : null);
+  const view = allowed ? store.getSampleView(id) : null;
   if (!view) {
     return res.status(404).json({ error: "not_found" });
   }

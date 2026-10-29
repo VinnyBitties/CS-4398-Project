@@ -156,6 +156,38 @@ Scan history, newest first. `limit` is 1 to 100 (default 20).
 { "total": 42, "limit": 20, "offset": 0, "samples": [ { "...sample object..." } ] }
 ```
 
+## Accounts and login
+
+Signing in is optional: the dashboard's "No Sign In" mode keeps working.
+When someone is signed in, their scans are tied to their account.
+
+| Route | Body | Success | Errors |
+|---|---|---|---|
+| `POST /auth/register` | `{ "username", "password" }` | `201 { user }`, and signs in | `400 invalid_username`, `400 invalid_password`, `409 username_taken`, `403 registration_closed` |
+| `POST /auth/login` | `{ "username", "password" }` | `200 { user }` | `400 missing_credentials`, `401 invalid_credentials`, `429 too_many_attempts` |
+| `POST /auth/logout` | none | `204` | |
+| `GET /auth/me` | none | `200 { user }` | `401 not_authenticated` (a guest) |
+
+`user` is `{ id, username, created_at }`. Usernames are 3 to 32 characters
+(letters, numbers, `.`, `-`, `_`) and are case-insensitive; passwords are 8
+to 128 characters.
+
+**How the session works.** Register and login set an `HttpOnly`,
+`SameSite=Lax` cookie named `sentinel_session`; the browser sends it with
+every later request, so the dashboard never handles a token itself. It
+lasts 7 days (`SESSION_TTL_HOURS`) or until logout.
+
+**Calling the API from the pages.** Open the dashboard from the backend,
+`http://localhost:3000/`, and plain `fetch("/api/...")` carries the cookie.
+If the pages are served from another origin (Live Server on port 5500), use
+`fetch("http://localhost:3000/api/...", { credentials: "include" })`; that
+origin must be in `CORS_ORIGINS`. Opening the HTML file directly
+(`file://`) will not keep you signed in.
+
+**Effect on scans.** A scan submitted while signed in belongs to that user.
+`GET /samples` lists the caller's own scans (guests see guest scans), and
+`GET /samples/{id}` answers `404` for a scan that belongs to someone else.
+
 ## Errors
 
 Every error is JSON: `{ "error": "<code>", "message": "<human readable>" }`.
@@ -192,10 +224,11 @@ and, on `behavioral_ml` only, `NO_SANDBOX_REPORT` (the sandbox stage failed).
 2. **Overall verdict.** There is no single "malicious / suspicious / clean"
    field or score yet, only `signature_match` plus per-stage reports. Who
    computes the verdict the dashboard shows, and from which stages?
-3. **Authentication.** None. Every route is open to anyone who can reach the
-   port. Fine on localhost; needs a decision before any shared deployment.
-4. **CORS.** Not enabled. If the dashboard is served from a different origin
-   than the API in development, the backend needs to allow that origin.
+3. **Authentication.** Accounts and sessions exist (see "Accounts and
+   login"), but signing in is optional. Should scanning require an account
+   once the demo is shared beyond localhost?
+4. **CORS.** Allowed only for origins in `CORS_ORIGINS` (Live Server's port
+   5500 by default). Not needed when the backend serves the pages.
 5. **Progress updates.** Polling only. Is that enough, or does the dashboard
    want server-sent events?
 6. **Signature match and later stages.** A signature match does not stop the

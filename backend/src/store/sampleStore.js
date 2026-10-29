@@ -13,16 +13,17 @@ const NOW = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
 
 const stmts = {
   insertFile: db.prepare(`
-    INSERT INTO samples (sha256, submission_type, original_filename, file_size, stored_path)
-    VALUES (?, 'file', ?, ?, ?)
+    INSERT INTO samples (sha256, submission_type, original_filename, file_size, stored_path, user_id)
+    VALUES (?, 'file', ?, ?, ?, ?)
   `),
   insertLink: db.prepare(`
-    INSERT INTO samples (sha256, submission_type, submitted_url)
-    VALUES (?, 'link', ?)
+    INSERT INTO samples (sha256, submission_type, submitted_url, user_id)
+    VALUES (?, 'link', ?, ?)
   `),
   getSample: db.prepare("SELECT * FROM samples WHERE id = ?"),
-  listSamples: db.prepare("SELECT id FROM samples ORDER BY id DESC LIMIT ? OFFSET ?"),
-  countSamples: db.prepare("SELECT COUNT(*) AS n FROM samples"),
+  // `user_id IS ?` also matches NULL, so passing null lists guest scans.
+  listSamples: db.prepare("SELECT id FROM samples WHERE user_id IS ? ORDER BY id DESC LIMIT ? OFFSET ?"),
+  countSamples: db.prepare("SELECT COUNT(*) AS n FROM samples WHERE user_id IS ?"),
 
   insertJob: db.prepare("INSERT INTO jobs (sample_id) VALUES (?)"),
   getJob: db.prepare("SELECT * FROM jobs WHERE id = ?"),
@@ -60,12 +61,18 @@ const createSampleAndJob = db.transaction((insert) => {
   return { sampleId, jobId };
 });
 
-function createFileSample({ sha256, originalFilename, fileSize, storedPath }) {
-  return createSampleAndJob(() => stmts.insertFile.run(sha256, originalFilename, fileSize, storedPath));
+// userId is the signed-in submitter, or null for a guest.
+function createFileSample({ sha256, originalFilename, fileSize, storedPath, userId = null }) {
+  return createSampleAndJob(() => stmts.insertFile.run(sha256, originalFilename, fileSize, storedPath, userId));
 }
 
-function createLinkSample({ sha256, url }) {
-  return createSampleAndJob(() => stmts.insertLink.run(sha256, url));
+function createLinkSample({ sha256, url, userId = null }) {
+  return createSampleAndJob(() => stmts.insertLink.run(sha256, url, userId));
+}
+
+/** Whether `userId` (null = guest) may see this sample: only its own submitter. */
+function canView(sampleRow, userId) {
+  return Boolean(sampleRow) && (sampleRow.user_id ?? null) === (userId ?? null);
 }
 
 function getSampleRow(id) {
@@ -115,12 +122,13 @@ function getSampleView(id) {
   };
 }
 
-function listSampleViews({ limit, offset }) {
+/** Scan history for one user, or for guests when userId is null. */
+function listSampleViews({ limit, offset, userId = null }) {
   return {
-    total: stmts.countSamples.get().n,
+    total: stmts.countSamples.get(userId).n,
     limit,
     offset,
-    samples: stmts.listSamples.all(limit, offset).map((row) => getSampleView(row.id)),
+    samples: stmts.listSamples.all(userId, limit, offset).map((row) => getSampleView(row.id)),
   };
 }
 
@@ -130,5 +138,6 @@ module.exports = {
   createLinkSample,
   getSampleRow,
   getSampleView,
+  canView,
   listSampleViews,
 };
