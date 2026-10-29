@@ -20,8 +20,12 @@
  * hide another's result.
  */
 
+const config = require("../config");
 const { runAnalyzer } = require("../analyzer/runAnalyzer");
 const { getCatalog } = require("../signatures/catalog");
+const { detonate } = require("../stages/sandboxClient");
+const { callStage } = require("../stages/httpStage");
+const { toMlReport, checkSandboxResponse } = require("../adapters/sandboxToMl");
 
 const signatureStage = {
   name: "signature",
@@ -51,8 +55,62 @@ const staticAnalysisStage = {
   },
 };
 
-// Not wired in yet, in pipeline order: static_ml (FR03), sandbox,
-// behavioral_ml (FR05, via src/stages/httpStage.js), llm (FR06).
+// Detonates the uploaded file in the team's sandbox VM
+// (dynamic_telemetry/api.py) and stores its raw response. Files only: the
+// sandbox can't render links yet (Week 8 in the plan).
+function createSandboxStage({ url, detonationSeconds, timeoutMs, detonateFn = detonate }) {
+  return {
+    name: "sandbox",
+    appliesTo: ["file"],
+    async run(sample) {
+      const response = await detonateFn(url, sample.stored_path, {
+        filename: sample.original_filename || undefined,
+        detonationSeconds,
+        timeoutMs,
+      });
+      // Fail here, not in behavioral_ml, if the run produced no usable
+      // telemetry (e.g. the Sysmon log never came back from the VM).
+      checkSandboxResponse(response);
+      return { report: response };
+    },
+  };
+}
+
+// Scores the sandbox telemetry with the ML team's service
+// (ML/predict.py --serve), via the adapter in src/adapters/sandboxToMl.js.
+function createBehavioralMlStage({ url, timeoutMs, callFn = callStage }) {
+  return {
+    name: "behavioral_ml",
+    appliesTo: ["file"],
+    async run(sample, ctx) {
+      const sandboxReport = ctx.reports.sandbox;
+      if (!sandboxReport) {
+        const err = new Error("No sandbox report to score (the sandbox stage did not complete)");
+        err.code = "NO_SANDBOX_REPORT";
+        throw err;
+      }
+      const { report: mlInput, notes } = toMlReport(sandboxReport);
+      const result = await callFn(url, mlInput, { timeoutMs });
+      return { report: { ...result, input_summary: mlInput.summary, adapter_notes: notes } };
+    },
+  };
+}
+
+// Still to come, in pipeline order: static_ml (FR03) after static_analysis,
+// llm (FR06) at the end.
 const stages = [signatureStage, staticAnalysisStage];
 
-module.exports = { stages };
+// The sandbox and behavioral ML stages are off unless SANDBOX_URL is set, so
+// the backend still runs (and its tests still pass) without the sandbox VM.
+if (config.sandboxUrl) {
+  stages.push(
+    createSandboxStage({
+      url: new URL("/detonate", config.sandboxUrl).href,
+      detonationSeconds: config.sandboxDetonationSeconds,
+      timeoutMs: config.sandboxTimeoutMs,
+    }),
+    createBehavioralMlStage({ url: config.behavioralMlUrl, timeoutMs: config.behavioralMlTimeoutMs })
+  );
+}
+
+module.exports = { stages, signatureStage, staticAnalysisStage, createSandboxStage, createBehavioralMlStage };

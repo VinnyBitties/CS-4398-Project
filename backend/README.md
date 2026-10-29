@@ -16,16 +16,18 @@ plan. This backend implements that design in `src/analyzer/runAnalyzer.js`.
 
 ## Open coordination items
 
-- **Sandbox telemetry schema.** The team confirmed (2026-09-29) this project
-  uses a custom virtual sandbox, not Cuckoo Sandbox. The ML team's
-  `report_parser.py` (`ML-Axel` branch) is built specifically against Cuckoo's
-  JSON shape (`signatures`, `network`, `behavior.summary.*`). Since the custom
-  sandbox won't emit that exact format, someone needs to either make the
-  sandbox Cuckoo-compatible or update `report_parser.py`'s field mapping —
-  needs a conversation between Dynamic Analysis, ML (Axel, Diego), and
-  backend before the behavioral-ML stage can be wired in for
-  real. `src/stages/httpStage.js` (below) is ready on the backend side either
-  way, since the HTTP-call pattern doesn't depend on the payload shape.
+- **Sandbox telemetry schema.** The sandbox (`dynamic_telemetry/api.py`,
+  `feature/dynamic-sandbox-engine`) and the ML parser (`ML/report_parser.py`,
+  `ML-Axel`, updated 2026-10-17) still expect different field names
+  (`process_count` vs `processes_created`, events under `telemetry` vs at the
+  top level, `query` vs `query_name`, and so on). The backend no longer waits
+  on this: `src/adapters/sandboxToMl.js` translates between them, and passes a
+  report through untouched once both sides agree on one shape. Two things only
+  the sandbox can fix: it does not capture injected remote threads yet (sent
+  to ML as 0, and noted in the result), and `/detonate` does not appear to
+  copy the sample into the VM or the Sysmon log back out, so real runs may
+  return a `parse_error`, which the backend records as a failed `sandbox`
+  stage rather than scoring empty telemetry.
 - **Route naming.** `docs/component-plan.example.md` on `main` sketches
   `POST /scans`; this implementation uses `POST /api/samples`. Confirm which
   convention the frontend/dashboard expects before either becomes load-bearing.
@@ -73,9 +75,16 @@ The dashboard-facing contract for everything below is in
     schema `1.2.0`). The real analyzer works too and is one `.env` line
     away; see below.
 
+  - `sandbox` — uploads the file to the sandbox service's `/detonate` and
+    stores its response. Files only; one detonation at a time, because the
+    sandbox has a single VM. **Off unless `SANDBOX_URL` is set.**
+  - `behavioral_ml` — converts the sandbox report with
+    `src/adapters/sandboxToMl.js` and POSTs it to the ML service
+    (`predict.py --serve`, `BEHAVIORAL_ML_URL`). Runs with `sandbox`.
+
   A stage that fails is recorded as failed and the rest still run. Static
-  ML, sandbox, behavioral ML and LLM stages are **not wired in**; adding one
-  is a new object in `stages.js` and nothing else.
+  ML and LLM stages are **not wired in**; adding one is a new object in
+  `stages.js` and nothing else.
 - **Signature catalog** — `src/signatures/catalog.js` loads
   `signatures/catalog.json` (curated entries: `sha256`, `domain`, `url`) plus
   an optional bulk hash list (`SIGNATURE_HASHLIST_PATH`, one SHA-256 per
@@ -85,8 +94,8 @@ The dashboard-facing contract for everything below is in
   silently never matching. YARA rules are not part of this.
 - `src/stages/httpStage.js` — the integration pattern for a stage exposed as
   a long-running HTTP service (matches the ML team's `predict.py --serve`).
-  Implemented and tested against a mock HTTP server, but not used by any
-  stage yet — blocked on the sandbox telemetry schema question above.
+  Used by the `behavioral_ml` stage. `src/stages/sandboxClient.js` is the
+  multipart-upload equivalent for the sandbox.
 
 ### Trying it
 
@@ -126,9 +135,10 @@ up as a failed `static_analysis` stage carrying the analyzer's own reason
 npm test
 ```
 
-29 tests across five files: the API end to end (`samples.test.js`), the job
+43 tests across six files: the API end to end (`samples.test.js`), the job
 queue (`jobQueue.test.js`), the signature catalog (`catalog.test.js`), the
-HTTP stage runner (`httpStage.test.js`) and the real analyzer
+HTTP stage runner (`httpStage.test.js`), the sandbox and behavioral ML stages
+against mock services (`sandboxStages.test.js`) and the real analyzer
 (`realAnalyzer.test.js`). All but the last run against the mock analyzer and
 an in-memory SQLite database, with no network access. The two real-analyzer
 tests are skipped unless `pefile` is installed for `python3`; they build an
@@ -141,8 +151,9 @@ inert PE with the analyzer's own test helper, so no binary is committed.
    whether it should become the default.
 2. Agree the API contract with the dashboard (`docs/api-contract.md`, "Open
    questions"), starting with route names.
-3. Settle the sandbox telemetry schema, then add the `sandbox` and
-   `behavioral_ml` stages.
+3. Run the `sandbox` and `behavioral_ml` stages against the real sandbox VM
+   once `/detonate` returns real telemetry, and agree one telemetry shape with
+   Dynamic Analysis and ML so the adapter can be removed.
 4. Choose a real signature feed and point `SIGNATURE_HASHLIST_PATH` at it.
 5. Decide on authentication and CORS before the API is reachable from
    anywhere but localhost.
