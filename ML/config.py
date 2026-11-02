@@ -1,3 +1,5 @@
+# Defines shared ML feature names, thresholds, dataset paths, and label constants.
+
 FEATURE_COLUMNS = [
     "num_processes_created",
     "num_files_written",
@@ -6,7 +8,7 @@ FEATURE_COLUMNS = [
     "num_dns_requests",
     "num_signatures_matched",
     "max_signature_severity",
-    "has_persistence_signature",   # binary flag from signatures list
+    "has_persistence_signature",   # binary persistence-behavior flag
     "has_network_signature",
 ]
 

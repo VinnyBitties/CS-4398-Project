@@ -1,8 +1,13 @@
 import copy
 import json
+import threading
 import unittest
+from urllib.request import Request, urlopen
 from pathlib import Path
 from report_parser import extract_features, analyze_report
+from predict import create_server, predict_report
+
+# Verifies report parsing, feature extraction, validation, and input immutability.
 
 class SandboxTests(unittest.TestCase):
     def setUp(self):
@@ -84,6 +89,69 @@ class SandboxTests(unittest.TestCase):
         original = copy.deepcopy(self.report)
         extract_features(self.report)
         self.assertEqual(original,self.report)
+
+    def test_run_and_runonce_registry_paths_without_signatures(self):
+        report = copy.deepcopy(self.report)
+        report["signatures"] = []
+        report["registry"] = [
+            {"path": r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run"},
+            {"key_path": r"HKCU\Software\Microsoft\Windows\CurrentVersion\RunOnce"},
+        ]
+        analysis = analyze_report(report)
+        self.assertEqual(analysis.features["has_persistence_signature"], 1)
+        self.assertTrue(any("registry persistence path" in item for item in analysis.evidence))
+        self.assertTrue(any("RunOnce" in item for item in analysis.evidence))
+
+    def test_scheduled_task_command_is_persistence_but_ordinary_process_is_not(self):
+        scheduled = copy.deepcopy(self.report)
+        scheduled["signatures"] = []
+        scheduled["processes"] = [{"command_line": "schtasks.exe /Create /SC ONLOGON /TN updater"}]
+        ordinary = copy.deepcopy(self.report)
+        ordinary["signatures"] = []
+        ordinary["processes"] = [{"command_line": "example.exe --scan"}]
+
+        scheduled_analysis = analyze_report(scheduled)
+        ordinary_analysis = analyze_report(ordinary)
+        self.assertEqual(scheduled_analysis.features["has_persistence_signature"], 1)
+        self.assertTrue(any("scheduled-task command" in item for item in scheduled_analysis.evidence))
+        self.assertEqual(ordinary_analysis.features["has_persistence_signature"], 0)
+
+    def test_missing_telemetry_is_an_error(self):
+        report = copy.deepcopy(self.report)
+        del report["registry"]
+        with self.assertRaisesRegex(ValueError, "registry"):
+            analyze_report(report)
+
+    def test_cli_and_http_predictions_match_for_same_model(self):
+        class FakeClassifier:
+            classes_ = [0, 1]
+
+            def predict(self, features):
+                return [1]
+
+            def predict_proba(self, features):
+                return [[0.1, 0.9]]
+
+        model = FakeClassifier()
+        expected = predict_report(self.report, threshold=0.8, classifier=model)
+        server = create_server("127.0.0.1", 0, threshold=0.8, classifier=model)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            request = Request(
+                f"http://127.0.0.1:{server.server_port}/analyze",
+                data=json.dumps(self.report).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urlopen(request) as response:
+                actual = json.loads(response.read())
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
+        self.assertEqual(actual, expected)
 
 if __name__ == '__main__':
     unittest.main()

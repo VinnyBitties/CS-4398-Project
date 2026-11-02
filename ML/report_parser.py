@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+# Loads sandbox reports and converts their behavior and signatures into ML features.
+
 import json
 import math
+import re
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any
@@ -151,6 +154,7 @@ def extract_features(report: dict[str, Any]) -> dict[str, int]:
 
     has_persistence_signature = int(
         _has_keyword_match(report, signatures, PERSISTENCE_KEYWORDS)
+        or _has_raw_persistence_match(report)
     )
     has_network_signature = int(
         _has_keyword_match(report, signatures, NETWORK_KEYWORDS) or network_connections > 0 or dns_requests > 0
@@ -207,6 +211,7 @@ def gather_evidence(report: dict[str, Any], features: dict[str, int]) -> list[st
         evidence.append(f"{features['num_signatures_matched']} signature(s) matched")
     if features["has_persistence_signature"]:
         evidence.append("persistence-related behavior detected")
+        evidence.extend(_raw_persistence_evidence(report))
     if features["has_network_signature"]:
         evidence.append("network-related behavior detected")
 
@@ -240,6 +245,63 @@ def _has_keyword_match(report: dict[str, Any], signatures: list[dict[str, Any]],
 
     haystack = " ".join(haystack_parts).lower()
     return any(keyword in haystack for keyword in keywords)
+
+
+def _raw_persistence_matches(report: dict[str, Any]) -> list[str]:
+    matches: list[str] = []
+    registry_events = _as_list(report.get("registry"))
+    process_events = _as_list(report.get("processes"))
+
+    for event in registry_events:
+        text = _event_text(event, ("path", "key", "key_path", "registry_path", "name", "value_name"))
+        if _contains_persistence_keyword(text):
+            matches.append(f"registry persistence path: {text}")
+
+    for event in process_events:
+        text = _event_text(event, ("command_line", "commandline", "cmdline", "command", "image"))
+        if _contains_scheduled_task_keyword(text):
+            matches.append(f"scheduled-task command: {text}")
+
+    return matches
+
+
+def _has_raw_persistence_match(report: dict[str, Any]) -> bool:
+    return bool(_raw_persistence_matches(report))
+
+
+def _raw_persistence_evidence(report: dict[str, Any]) -> list[str]:
+    return _raw_persistence_matches(report)[:5]
+
+
+def _event_text(event: dict[str, Any], keys: tuple[str, ...]) -> str:
+    values = [str(event[key]) for key in keys if event.get(key)]
+    return " ".join(values).strip()
+
+
+def _contains_persistence_keyword(text: str) -> bool:
+    normalized = text.lower().replace("/", "\\")
+    return bool(
+        re.search(r"(?:^|\\)(?:run|runonce)(?:\\|$)", normalized)
+        or "currentversion\\run" in normalized
+        or "currentversion\\runonce" in normalized
+        or _contains_scheduled_task_keyword(normalized)
+        or any(keyword in normalized for keyword in ("autorun", "startup", "persistence"))
+    )
+
+
+def _contains_scheduled_task_keyword(text: str) -> bool:
+    normalized = text.lower()
+    return any(
+        marker in normalized
+        for marker in (
+            "schtasks",
+            "scheduled task",
+            "scheduled-task",
+            "scheduledtask",
+            "register-scheduledtask",
+            "new-scheduledtask",
+        )
+    )
 
 
 def _count_network_connections(network: dict[str, Any]) -> int:

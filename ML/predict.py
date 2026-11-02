@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# Provides command-line and HTTP interfaces for analyzing sandbox reports with ML models.
+
 import sys
 import argparse
 import json
@@ -46,22 +48,69 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.serve:
-        run_server(args.host, args.port)
+        classifier = joblib.load(args.classifier_model) if args.classifier_model else None
+        anomaly_detector = joblib.load(args.anomaly_model) if args.anomaly_model else None
+        run_server(args.host, args.port, threshold=args.threshold, classifier=classifier, anomaly_detector=anomaly_detector)
         return
 
     report = load_input_report(args.file)
-    result = analyze_report(report, threshold=args.threshold)
-    output = result.to_dict()
-    features = reports_to_matrix([report])
-    if args.classifier_model:
-        classifier = joblib.load(args.classifier_model)
-        output["classifier_prediction"] = int(classifier.predict(features)[0])
-        output["classifier_probability"] = float(classifier.predict_proba(features)[0][1])
-    if args.anomaly_model:
-        detector = joblib.load(args.anomaly_model)
-        output["anomaly_prediction"] = "anomaly" if detector.predict(features)[0] == -1 else "known"
-        output["anomaly_score"] = float(detector.decision_function(features)[0])
+    classifier = joblib.load(args.classifier_model) if args.classifier_model else None
+    anomaly_detector = joblib.load(args.anomaly_model) if args.anomaly_model else None
+    output = predict_report(
+        report,
+        threshold=args.threshold,
+        classifier=classifier,
+        anomaly_detector=anomaly_detector,
+    )
     print(json.dumps(output, indent=2))
+
+
+def predict_report(
+    report: dict[str, Any],
+    threshold: float = DEFAULT_MALICIOUS_THRESHOLD,
+    classifier: Any = None,
+    anomaly_detector: Any = None,
+) -> dict[str, Any]:
+    heuristic = analyze_report(report, threshold=threshold)
+    output = heuristic.to_dict()
+    output["prediction_source"] = "heuristic"
+
+    if classifier is None and anomaly_detector is None:
+        return output
+
+    features = reports_to_matrix([report])
+    output["prediction_source"] = "trained_model"
+    if classifier is not None:
+        predicted = int(classifier.predict(features)[0])
+        output["classifier_prediction"] = predicted
+        if not hasattr(classifier, "predict_proba"):
+            raise ValueError("The classifier model does not support predict_proba().")
+        probabilities = classifier.predict_proba(features)[0]
+        classes = list(getattr(classifier, "classes_", []))
+        if 1 not in classes:
+            raise ValueError("The classifier model does not provide a malicious class.")
+        malicious_probability = float(probabilities[classes.index(1)])
+        output["classifier_probability"] = malicious_probability
+        output["malicious"] = malicious_probability >= threshold
+        output["risk_score"] = round(malicious_probability, 3)
+        output["risk_level"] = _risk_level(malicious_probability)
+
+    if anomaly_detector is not None:
+        prediction = int(anomaly_detector.predict(features)[0])
+        output["anomaly_prediction"] = "anomaly" if prediction == -1 else "known"
+        output["anomaly_score"] = float(anomaly_detector.decision_function(features)[0])
+
+    return output
+
+
+def _risk_level(score: float) -> str:
+    if score >= 0.8:
+        return "critical"
+    if score >= 0.6:
+        return "high"
+    if score >= 0.4:
+        return "medium"
+    return "low"
 
 
 def load_input_report(file_path: str | None) -> dict[str, Any]:
@@ -76,6 +125,9 @@ def load_input_report(file_path: str | None) -> dict[str, Any]:
 
 class ReportRequestHandler(BaseHTTPRequestHandler):
     server_version = "AzureSandboxReportAnalyzer/1.0"
+    threshold = DEFAULT_MALICIOUS_THRESHOLD
+    classifier: Any = None
+    anomaly_detector: Any = None
 
     def do_POST(self) -> None:  # noqa: N802
         if self.path not in {"/analyze", "/analyze-report", "/"}:
@@ -87,7 +139,12 @@ class ReportRequestHandler(BaseHTTPRequestHandler):
 
         try:
             payload = json.loads(body.decode("utf-8"))
-            result = analyze_report(payload, threshold=DEFAULT_MALICIOUS_THRESHOLD).to_dict()
+            result = predict_report(
+                payload,
+                threshold=self.threshold,
+                classifier=self.classifier,
+                anomaly_detector=self.anomaly_detector,
+            )
             response = json.dumps(result).encode("utf-8")
         except Exception as exc:  # pragma: no cover - defensive HTTP boundary
             response = json.dumps({"error": str(exc)}).encode("utf-8")
@@ -117,8 +174,14 @@ class ReportRequestHandler(BaseHTTPRequestHandler):
         self.send_error(404, "Endpoint not found")
 
 
-def run_server(host: str, port: int) -> None:
-    server = ThreadingHTTPServer((host, port), ReportRequestHandler)
+def run_server(
+    host: str,
+    port: int,
+    threshold: float = DEFAULT_MALICIOUS_THRESHOLD,
+    classifier: Any = None,
+    anomaly_detector: Any = None,
+) -> None:
+    server = create_server(host, port, threshold, classifier, anomaly_detector)
     print(f"Listening on http://{host}:{port}")
     print("POST JSON reports from the Azure sandboxed environment to /analyze or /analyze-report")
     try:
@@ -127,6 +190,25 @@ def run_server(host: str, port: int) -> None:
         pass
     finally:
         server.server_close()
+
+
+def create_server(
+    host: str,
+    port: int,
+    threshold: float = DEFAULT_MALICIOUS_THRESHOLD,
+    classifier: Any = None,
+    anomaly_detector: Any = None,
+) -> ThreadingHTTPServer:
+    handler = type(
+        "ConfiguredReportRequestHandler",
+        (ReportRequestHandler,),
+        {
+            "threshold": threshold,
+            "classifier": classifier,
+            "anomaly_detector": anomaly_detector,
+        },
+    )
+    return ThreadingHTTPServer((host, port), handler)
 
 
 if __name__ == "__main__":

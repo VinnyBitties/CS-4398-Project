@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# Evaluates trained classifier and anomaly-detection models and prints JSON metrics.
+
 import argparse
 import json
 from pathlib import Path
