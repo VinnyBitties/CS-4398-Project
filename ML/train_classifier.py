@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# Trains and saves a Random Forest classifier using extracted sandbox report features.
+
 import argparse
 from pathlib import Path
 

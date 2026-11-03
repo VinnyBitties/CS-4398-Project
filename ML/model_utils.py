@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# Loads labeled records and converts reports into matrices and labels for model training.
+
 import json
 from pathlib import Path
 from typing import Any

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# Trains and saves an Isolation Forest model for detecting unusual sandbox reports.
+
 import argparse
 from pathlib import Path
 
