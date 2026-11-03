@@ -26,6 +26,8 @@ const { getCatalog } = require("../signatures/catalog");
 const { detonate } = require("../stages/sandboxClient");
 const { callStage } = require("../stages/httpStage");
 const { toMlReport, checkSandboxResponse } = require("../adapters/sandboxToMl");
+const { runPythonJson } = require("../stages/pythonStage");
+const { buildLlmInput } = require("../adapters/llmInput");
 
 const signatureStage = {
   name: "signature",
@@ -96,8 +98,30 @@ function createBehavioralMlStage({ url, timeoutMs, callFn = callStage }) {
   };
 }
 
-// Still to come, in pipeline order: static_ml (FR03) after static_analysis,
-// llm (FR06) at the end.
+// Runs last: hands every earlier report to the LLM/Threat Intelligence
+// component (llm-threat-intelligence/) through scripts/llm_bridge.py, which
+// returns threat-intel results for the sample's indicators and the prompt
+// built from the evidence. Stages that failed or didn't run are passed as {}.
+function createLlmStage({ pythonPath, bridgePath, llmDir, timeoutMs, runFn = runPythonJson }) {
+  return {
+    name: "llm",
+    appliesTo: ["file", "link"],
+    async run(sample, ctx) {
+      const { report, indicators } = buildLlmInput(sample, ctx.reports);
+      const result = await runFn({
+        pythonPath,
+        scriptPath: bridgePath,
+        args: [llmDir],
+        input: { report, indicators },
+        timeoutMs,
+      });
+      const stagesUsed = Object.keys(ctx.reports).filter((name) => ctx.reports[name] != null);
+      return { report: { ...result, indicators, stages_used: stagesUsed } };
+    },
+  };
+}
+
+// Still to come: static_ml (FR03) after static_analysis.
 const stages = [signatureStage, staticAnalysisStage];
 
 // The sandbox and behavioral ML stages are off unless SANDBOX_URL is set, so
@@ -113,4 +137,23 @@ if (config.sandboxUrl) {
   );
 }
 
-module.exports = { stages, signatureStage, staticAnalysisStage, createSandboxStage, createBehavioralMlStage };
+// The LLM stage is off unless LLM_DIR points at llm-threat-intelligence/.
+if (config.llmDir) {
+  stages.push(
+    createLlmStage({
+      pythonPath: config.pythonPath,
+      bridgePath: config.llmBridgePath,
+      llmDir: config.llmDir,
+      timeoutMs: config.llmTimeoutMs,
+    })
+  );
+}
+
+module.exports = {
+  stages,
+  signatureStage,
+  staticAnalysisStage,
+  createSandboxStage,
+  createBehavioralMlStage,
+  createLlmStage,
+};

@@ -92,9 +92,17 @@ The dashboard-facing contract for everything below is in
   - `behavioral_ml` — converts the sandbox report with
     `src/adapters/sandboxToMl.js` and POSTs it to the ML service
     (`predict.py --serve`, `BEHAVIORAL_ML_URL`). Runs with `sandbox`.
+  - `llm` — runs last, for files and links. Builds the LLM/Threat
+    Intelligence input from every earlier report
+    (`src/adapters/llmInput.js`) and runs Jaden's `llm-threat-intelligence/`
+    through `scripts/llm_bridge.py`. Stores threat-intel results for the
+    sample's indicators (file hash, submitted URL and host, public domains
+    and IPs from the sandbox) and the prompt built from the evidence. The
+    component doesn't call an LLM yet, so `explanation` is `null` for now.
+    **Off unless `LLM_DIR` is set.**
 
-  A stage that fails is recorded as failed and the rest still run. Static
-  ML and LLM stages are **not wired in**; adding one is a new object in
+  A stage that fails is recorded as failed and the rest still run. The
+  static ML stage is **not wired in**; adding it is a new object in
   `stages.js` and nothing else.
 - **Signature catalog** — `src/signatures/catalog.js` loads
   `signatures/catalog.json` (curated entries: `sha256`, `domain`, `url`) plus

@@ -77,6 +77,12 @@ const config = {
   behavioralMlUrl: process.env.BEHAVIORAL_ML_URL || "http://127.0.0.1:8000/",
   behavioralMlTimeoutMs: parseInt(process.env.BEHAVIORAL_ML_TIMEOUT_MS || "15000", 10),
 
+  // LLM / Threat Intelligence stage (llm-threat-intelligence/). Empty = the
+  // stage is skipped. Run through scripts/llm_bridge.py with PYTHON_PATH.
+  llmDir: process.env.LLM_DIR ? resolveFromRoot(process.env.LLM_DIR) : "",
+  llmBridgePath: resolveFromRoot(process.env.LLM_BRIDGE_PATH || "./scripts/llm_bridge.py"),
+  llmTimeoutMs: parseInt(process.env.LLM_TIMEOUT_MS || "30000", 10),
+
   // Accounts and sessions (src/auth, src/routes/auth.js).
   // How long a login lasts before the user has to sign in again.
   sessionTtlHours: parseInt(process.env.SESSION_TTL_HOURS || "168", 10), // 7 days

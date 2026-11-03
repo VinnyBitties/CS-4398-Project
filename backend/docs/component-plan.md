@@ -30,8 +30,14 @@ queue, pipeline orchestration, and historical scan records (FR01, FR02, FR08).
       and calls `predict.py --serve`. Verified against the real `predict.py`
       from `ML-Axel` and a mock sandbox; not yet against the real sandbox VM.
       Off unless `SANDBOX_URL` is set.
-- [ ] [backend-06] Wire the LLM threat-analysis stage (FR06) into the pipeline.
-      Not started; no LLM/Threat Intel branch exists yet as of this writing.
+- [x] [backend-06] Wire the LLM threat-analysis stage (FR06) into the pipeline.
+      `llm` runs last and hands every earlier report to
+      `llm-threat-intelligence/` (branch `llm-threat-intelligence`) through
+      `scripts/llm_bridge.py`. Verified against that branch's
+      `llm_analyzer.py` and `threat_intel.py` (`test/llmStage.test.js`).
+      Off unless `LLM_DIR` is set. The component builds the prompt and a
+      placeholder threat-intel lookup but doesn't call an LLM yet; when it
+      does, the bridge fills in `explanation`.
 - [x] [backend-08] Accept link/URL submissions (professor feedback, suggestion
       4). `POST /api/links` validates, stores and signature-checks a URL
       without fetching it. Rendering the page is the sandbox stage's job.
@@ -78,5 +84,6 @@ preferred convention over `/samples`.
 
 ## Completion
 
-Status: active. Not ready for `Status: final` -- static ML and LLM stages are
-unimplemented, and the sandbox stage has not run against the real VM yet.
+Status: active. Not ready for `Status: final` -- the static ML stage is
+unimplemented, the LLM stage returns no explanation until the component calls
+an LLM, and the sandbox stage has not run against the real VM yet.

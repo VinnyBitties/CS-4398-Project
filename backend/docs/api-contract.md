@@ -59,7 +59,7 @@ Each `results[]` entry:
 | `static_ml` | files | Planned | To be defined with ML. |
 | `sandbox` | files | **Live when `SANDBOX_URL` is set** | The sandbox's `/detonate` response as-is: `{ job_id, filename, timeout_seconds, summary: { process_count, network_count, dns_count, file_drops_count, registry_count }, telemetry: { processes[], network[], dns[], file_drops[], registry[] } }`. Links are not detonated yet. |
 | `behavioral_ml` | files | **Live when `SANDBOX_URL` is set** | The ML service's verdict, `{ malicious, risk_score, risk_level, features, evidence[] }`, plus `input_summary` (the counts that were scored) and `adapter_notes[]` (values the backend had to fill in). |
-| `llm` | files, links | Planned | To be defined with LLM/Threat Intelligence. |
+| `llm` | files, links | **Live when `LLM_DIR` is set** | `{ threat_intel[], prompt, explanation, explanation_status, indicators[], stages_used[] }`. `indicators[]` is `{ indicator, type: "hash"\|"url"\|"domain"\|"ip" }`; `threat_intel[]` is the component's result for each, `{ indicator, type, status, message }`. `explanation` is `null` and `explanation_status` is `"not_generated"` until the LLM/Threat Intelligence component calls an LLM. `stages_used[]` names the earlier stages whose reports went into the prompt. |
 
 New stages appear as extra `results[]` entries. Nothing else about the sample
 object changes, so a dashboard that renders `results[]` generically picks them
