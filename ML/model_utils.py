@@ -21,15 +21,27 @@ def load_records(source: str | Path) -> list[dict[str, Any]]:
 
 
 def reports_to_matrix(records: list[Any]) -> np.ndarray:
+    if not records:
+        raise ValueError("Dataset must contain at least one report.")
     reports = [record.get("report", record) if isinstance(record, dict) else record for record in records]
+    features = [extract_features(report) for report in reports]
     return np.array(
-        [[extract_features(report).get(column, 0) for column in FEATURE_COLUMNS] for report in reports],
+        [[row[column] for column in FEATURE_COLUMNS] for row in features],
         dtype=float,
     )
 
 
 def labels_from_records(records: list[dict[str, Any]]) -> np.ndarray:
-    try:
-        return np.array([int(record["label"]) for record in records], dtype=int)
-    except (KeyError, TypeError, ValueError) as exc:
-        raise ValueError('Each classifier record must contain a numeric "label".') from exc
+    if not records:
+        raise ValueError("Dataset must contain at least one labeled report.")
+    for index, record in enumerate(records):
+        if (not isinstance(record, dict) or type(record.get("label")) is not int
+                or record["label"] not in (0, 1)):
+            raise ValueError(f"Record {index}: label must be an integer 0 or 1.")
+    return np.array([record["label"] for record in records], dtype=int)
+
+
+def benign_training_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if np.any(labels_from_records(records) != 0):
+        raise ValueError("Isolation Forest training requires only records labeled 0 (benign).")
+    return records

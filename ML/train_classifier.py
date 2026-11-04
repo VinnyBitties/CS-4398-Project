@@ -19,10 +19,10 @@ def main() -> None:
     args = parser.parse_args()
 
     records = load_records(args.data)
-    features = reports_to_matrix(records)
     labels = labels_from_records(records)
     if len(set(labels)) < 2:
         raise ValueError("Random Forest training requires both benign and malicious labels.")
+    features = reports_to_matrix(records)
 
     model = RandomForestClassifier(
         n_estimators=args.trees,
@@ -31,6 +31,7 @@ def main() -> None:
         n_jobs=-1,
     )
     model.fit(features, labels)
+    Path(args.model_out).parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, Path(args.model_out))
     print(f"Saved Random Forest model to {args.model_out}")
 

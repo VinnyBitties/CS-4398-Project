@@ -58,14 +58,45 @@ malformed, or unusable telemetry and empty manifests stop the export before
 opening the output file. Reports are no longer silently skipped. Successful
 exports replace an existing output at the requested path.
 
-To check classifier training after exporting JSON:
+Split before training, then choose the classifier threshold on validation data:
 
 ```powershell
-python ML/train_classifier.py --data data/records.json --model-out data/random_forest.joblib
+python ML/split_dataset.py --data data/records.json --out-dir data/splits --seed 42
+python ML/train_classifier.py --data data/splits/train.json --model-out models/random_forest.joblib
+python ML/train_anomaly.py --data data/splits/train_benign.json --model-out models/isolation_forest.joblib
+python ML/tune_threshold.py --validation-data data/splits/validation.json --model models/random_forest.joblib --out models/threshold.json
+$mlThreshold = (Get-Content models/threshold.json -Raw | ConvertFrom-Json).threshold
+python ML/evaluate.py --data data/splits/test.json --model models/random_forest.joblib --model-type classifier --threshold $mlThreshold
+python ML/evaluate.py --data data/splits/test.json --model models/isolation_forest.joblib --model-type anomaly
+python ML/predict.py --serve --classifier-model models/random_forest.joblib --anomaly-model models/isolation_forest.joblib --threshold $mlThreshold
 ```
 
-For Isolation Forest, export a manifest containing only benign training reports
-and pass that JSON file to `train_anomaly.py`. The current anomaly trainer does
-not enforce benign-only input. Use separate training, validation, and test
-datasets for evaluation; automatic splitting and training-side validation are
-the separate priority 4 changes. These exports alone do not train a model.
+Splitting defaults to 60% training, 20% validation, and 20% test within each
+class, with rounding and at least one record of each class per partition.
+`--validation-fraction` and `--test-fraction` customize the proportions. Small
+datasets that cannot populate all partitions are rejected. `split_info.json`
+records the seed, fractions, and actual counts. Existing split files are not
+overwritten. `train_benign.json` is a subset of training only, not a fourth
+independent partition.
+
+Training and evaluation require integer labels 0 or 1; strings, booleans, and
+fractional labels are rejected. The classifier requires both classes. The
+anomaly trainer requires every record to be explicitly labeled 0 and rejects
+mixed or unlabeled input rather than silently training on malicious examples.
+
+Threshold tuning maximizes malicious-class F1 on validation probabilities.
+Ties prefer the threshold closest to 0.5, then the higher threshold. The JSON
+output records the selected value, validation F1, model path, and validation
+input path. Evaluation and serving must receive that same threshold explicitly;
+they do not automatically read the threshold file. The anomaly model keeps
+its own fitted decision boundary; its output is not a malware probability.
+
+Keep test data untouched until the model and threshold choices are final.
+The tools cannot tell whether a caller mislabeled a training file as validation.
+Splitting rejects identical reports and repeated job IDs to catch simple
+duplication. Different runs of the same real sample, malware family, or other
+related groups must be grouped before splitting real datasets; this random
+record splitter does not establish independence between those groups.
+
+All metrics on generated data remain synthetic demonstration results, not
+evidence of real-world malware detection accuracy.
