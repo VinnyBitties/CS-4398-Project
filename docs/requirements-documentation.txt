@@ -1,0 +1,2 @@
+# No third-party packages are required. The Word-form generator uses Python's
+# standard-library ZIP and XML support so it can run in the project environment.
