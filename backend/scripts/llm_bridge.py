@@ -42,7 +42,7 @@ def main():
     # llm_analyzer.py imports threat_intel as a sibling module.
     sys.path.insert(0, llm_dir)
     try:
-        from llm_analyzer import build_security_prompt
+        from llm_analyzer import build_security_prompt, generate_llm_explanation
         from threat_intel import analyze_indicator
     except Exception as exc:  # noqa: BLE001 -- report any import problem as JSON
         fail("LlmImportError", f"{type(exc).__name__}: {exc}")
@@ -58,6 +58,7 @@ def main():
     try:
         threat_intel = [analyze_indicator(i["indicator"], i["type"]) for i in indicators]
         prompt = build_security_prompt(report)
+        explanation = generate_llm_explanation(report)
     except Exception as exc:  # noqa: BLE001
         fail(type(exc).__name__, str(exc))
 
@@ -65,8 +66,8 @@ def main():
         {
             "threat_intel": threat_intel,
             "prompt": prompt.strip(),
-            "explanation": None,
-            "explanation_status": "not_generated",
+            "explanation": explanation,
+            "explanation_status": "generated",
         },
         sys.stdout,
     )
