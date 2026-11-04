@@ -5,13 +5,15 @@ from __future__ import annotations
 import sys
 import argparse
 import json
+import hashlib
+import io
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
 import joblib
 
-from config import DEFAULT_MALICIOUS_THRESHOLD
+from config import DEFAULT_MALICIOUS_THRESHOLD, FEATURE_COLUMNS, FEATURE_SCHEMA_VERSION
 from model_utils import reports_to_matrix
 from report_parser import analyze_report, load_report
 
@@ -47,15 +49,13 @@ def main() -> None:
     parser = build_argument_parser()
     args = parser.parse_args()
 
+    classifier = load_model(args.classifier_model) if args.classifier_model else None
+    anomaly_detector = load_model(args.anomaly_model) if args.anomaly_model else None
     if args.serve:
-        classifier = joblib.load(args.classifier_model) if args.classifier_model else None
-        anomaly_detector = joblib.load(args.anomaly_model) if args.anomaly_model else None
         run_server(args.host, args.port, threshold=args.threshold, classifier=classifier, anomaly_detector=anomaly_detector)
         return
 
     report = load_input_report(args.file)
-    classifier = joblib.load(args.classifier_model) if args.classifier_model else None
-    anomaly_detector = joblib.load(args.anomaly_model) if args.anomaly_model else None
     output = predict_report(
         report,
         threshold=args.threshold,
@@ -65,21 +65,61 @@ def main() -> None:
     print(json.dumps(output, indent=2))
 
 
+def load_model(path: str | Path) -> Any:
+    """Identify the exact trusted artifact loaded, including older estimators."""
+    data = Path(path).read_bytes()
+    model = joblib.load(io.BytesIO(data))
+    model.sentinel_artifact_version_ = "sha256:" + hashlib.sha256(data).hexdigest()
+    model_info(model)  # Reject known incompatible schemas before serving.
+    return model
+
+
+def model_info(model: Any) -> dict[str, Any]:
+    if model is None:
+        return {"loaded": False, "type": None, "version": None,
+                "feature_schema_version": None, "schema_verified": False}
+    schema = getattr(model, "sentinel_feature_schema_", None)
+    if schema is not None and (not isinstance(schema, dict)
+            or schema.get("version") != FEATURE_SCHEMA_VERSION
+            or schema.get("columns") != FEATURE_COLUMNS):
+        raise ValueError("Model feature schema is incompatible with this predictor; retrain the model.")
+    count = getattr(model, "n_features_in_", len(FEATURE_COLUMNS))
+    if count != len(FEATURE_COLUMNS):
+        raise ValueError("Model feature count is incompatible with this predictor.")
+    return {"loaded": True, "type": type(model).__name__,
+            "version": getattr(model, "sentinel_artifact_version_", None),
+            "feature_schema_version": schema["version"] if schema else None,
+            "schema_verified": schema is not None}
+
+
+def scoring_info(threshold: float, classifier: Any, anomaly_detector: Any) -> dict[str, Any]:
+    if not 0 <= threshold <= 1:
+        raise ValueError("Threshold must be between 0 and 1.")
+    return {
+        # These sources describe distinct outputs; anomalies never replace the verdict.
+        "prediction_source": "trained_model" if classifier is not None else "heuristic",
+        "anomaly_source": "trained_model" if anomaly_detector is not None else None,
+        "threshold": threshold,
+        "feature_schema_version": FEATURE_SCHEMA_VERSION,
+        "models": {"classifier": model_info(classifier), "anomaly": model_info(anomaly_detector)},
+    }
+
+
 def predict_report(
     report: dict[str, Any],
     threshold: float = DEFAULT_MALICIOUS_THRESHOLD,
     classifier: Any = None,
     anomaly_detector: Any = None,
 ) -> dict[str, Any]:
+    metadata = scoring_info(threshold, classifier, anomaly_detector)
     heuristic = analyze_report(report, threshold=threshold)
     output = heuristic.to_dict()
-    output["prediction_source"] = "heuristic"
+    output.update(metadata)
 
     if classifier is None and anomaly_detector is None:
         return output
 
     features = reports_to_matrix([report])
-    output["prediction_source"] = "trained_model"
     if classifier is not None:
         predicted = int(classifier.predict(features)[0])
         output["classifier_prediction"] = predicted
@@ -163,7 +203,9 @@ class ReportRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         if self.path in {"/", "/health"}:
-            response = json.dumps({"status": "ok"}).encode("utf-8")
+            response = json.dumps({"status": "ok", **scoring_info(
+                self.threshold, self.classifier, self.anomaly_detector,
+            )}).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(response)))
@@ -199,6 +241,7 @@ def create_server(
     classifier: Any = None,
     anomaly_detector: Any = None,
 ) -> ThreadingHTTPServer:
+    scoring_info(threshold, classifier, anomaly_detector)
     handler = type(
         "ConfiguredReportRequestHandler",
         (ReportRequestHandler,),

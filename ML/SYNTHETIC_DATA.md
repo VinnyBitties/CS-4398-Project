@@ -100,3 +100,32 @@ record splitter does not establish independence between those groups.
 
 All metrics on generated data remain synthetic demonstration results, not
 evidence of real-world malware detection accuracy.
+
+## Prediction sources and service health
+
+`prediction_source` describes the source of `risk_score`, `risk_level`, and
+`malicious`. It is `trained_model` only when a classifier supplies the verdict;
+otherwise it is `heuristic`, even if an anomaly detector is loaded.
+`anomaly_source` is `trained_model` when an anomaly detector is loaded and
+`null` otherwise. The separate `anomaly_prediction` and `anomaly_score` fields
+never replace the main verdict. An anomaly is unusual behavior, not proof of malware.
+
+Prediction responses and `GET /health` include the active threshold, runtime
+`feature_schema_version`, and `models.classifier` / `models.anomaly` information:
+loaded status, estimator type, artifact version, recorded feature-schema
+version, and whether that schema was verified. `/health` returning `status: ok`
+means the service is running; check `models` to see whether it has trained models.
+
+Artifact versions are SHA-256 hashes of the exact `.joblib` bytes loaded at
+startup. Models supplied directly as Python objects have a null artifact
+version unless loaded through `predict.load_model`. No local model paths are
+exposed through these responses.
+
+Both trainers now save the feature-schema version and ordered feature names
+inside their estimators. The predictor rejects known incompatible schemas or
+feature counts before starting the server. Older models without schema metadata
+remain supported but report `schema_verified: false` and a null recorded schema
+version; matching feature counts alone cannot verify extraction semantics.
+Retrain to attach the current schema. Increment `FEATURE_SCHEMA_VERSION` when
+feature ordering or extraction semantics change. These schema checks apply to
+the predictor; evaluation and threshold tuning still load estimators directly.

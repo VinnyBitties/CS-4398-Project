@@ -8,7 +8,7 @@ from pathlib import Path
 import joblib
 from sklearn.ensemble import RandomForestClassifier
 
-from model_utils import labels_from_records, load_records, reports_to_matrix
+from model_utils import labels_from_records, load_records, reports_to_matrix, stamp_feature_schema
 
 
 def main() -> None:
@@ -31,6 +31,7 @@ def main() -> None:
         n_jobs=-1,
     )
     model.fit(features, labels)
+    stamp_feature_schema(model)
     Path(args.model_out).parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, Path(args.model_out))
     print(f"Saved Random Forest model to {args.model_out}")

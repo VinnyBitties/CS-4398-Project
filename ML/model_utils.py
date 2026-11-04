@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from config import FEATURE_COLUMNS
+from config import FEATURE_COLUMNS, FEATURE_SCHEMA_VERSION
 from report_parser import extract_features
 
 
@@ -45,3 +45,10 @@ def benign_training_records(records: list[dict[str, Any]]) -> list[dict[str, Any
     if np.any(labels_from_records(records) != 0):
         raise ValueError("Isolation Forest training requires only records labeled 0 (benign).")
     return records
+
+
+def stamp_feature_schema(model: Any) -> None:
+    """Persist the feature contract with a fitted estimator without wrapping it."""
+    model.sentinel_feature_schema_ = {
+        "version": FEATURE_SCHEMA_VERSION, "columns": list(FEATURE_COLUMNS),
+    }
