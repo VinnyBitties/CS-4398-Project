@@ -1,4 +1,5 @@
 import json
+from groq import Groq
 from threat_intel import analyze_indicator
 
 
@@ -46,6 +47,35 @@ Base the explanation only on the supplied analysis evidence.
 
     return prompt
 
+
+def generate_llm_explanation(report):
+    """Generate an AI explanation of Sentinel scan results using Groq."""
+    client = Groq()
+    prompt = build_security_prompt(report)
+
+    response = client.chat.completions.create(
+        model="openai/gpt-oss-20b",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a cybersecurity analysis assistant. "
+                    "Explain only what the supplied scan evidence supports. "
+                    "Do not invent malware detections or suspicious behaviors. "
+                    "If evidence is insufficient, clearly say so."
+                ),
+            },
+            {
+                "role": "user",
+                "content": prompt,
+            },
+        ],
+        max_tokens=500,
+    )
+
+    return response.choices[0].message.content
+    
+    
 
 if __name__ == "__main__":
     report = load_analysis_report("sample_report.json")
