@@ -9,6 +9,7 @@ Run from the repository root:
 
 ```powershell
 python ML/synthetic_reports.py --count 300 --seed 42
+python ML/build_dataset.py --manifest data/manifest.csv --out data/records.json
 python ML/build_dataset.py --manifest data/manifest.csv --out data/features.csv
 ```
 
@@ -41,6 +42,30 @@ different classes deliberately have indistinguishable feature vectors.
 Synthetic evaluation measures behavior on these fixtures, not real malware
 detection accuracy. This data is for pipeline development and demos.
 
-The dataset builder still exports feature CSV, while the training scripts
-expect JSON records. Connecting that output to training is the separate
-priority 3 change; these commands do not train or save a model.
+The JSON export contains an array of `{"report": {...}, "label": 0}` records,
+preserving the original reports and synthetic metadata. It is accepted directly
+by `train_classifier.py`, `train_anomaly.py`, and `evaluate.py`. The feature CSV
+is optional and useful for inspection; the training scripts still consume JSON.
+
+The builder infers JSON from a `.json` output filename. `--format json` selects
+JSON explicitly and defaults to `data/records.json` if `--out` is omitted.
+Running without either option retains the existing `data/features.csv` default.
+Manifest paths that are relative are resolved against the current working
+directory, as before. The generator writes absolute paths.
+
+Both export formats validate every report and require labels 0 or 1. Missing,
+malformed, or unusable telemetry and empty manifests stop the export before
+opening the output file. Reports are no longer silently skipped. Successful
+exports replace an existing output at the requested path.
+
+To check classifier training after exporting JSON:
+
+```powershell
+python ML/train_classifier.py --data data/records.json --model-out data/random_forest.joblib
+```
+
+For Isolation Forest, export a manifest containing only benign training reports
+and pass that JSON file to `train_anomaly.py`. The current anomaly trainer does
+not enforce benign-only input. Use separate training, validation, and test
+datasets for evaluation; automatic splitting and training-side validation are
+the separate priority 4 changes. These exports alone do not train a model.
