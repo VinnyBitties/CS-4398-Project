@@ -20,12 +20,15 @@ from sklearn.metrics import (
 )
 
 from model_utils import labels_from_records, load_records, reports_to_matrix
+from config import DEFAULT_MALICIOUS_THRESHOLD
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
 	parser = argparse.ArgumentParser(description="Evaluate a trained malware detection model.")
 	parser.add_argument("--data", required=True, help="JSON array of test records.")
 	parser.add_argument("--model", required=True, help="Saved .joblib model to evaluate.")
+	parser.add_argument("--threshold", type=float, default=DEFAULT_MALICIOUS_THRESHOLD,
+	                    help="Classifier threshold selected using validation data.")
 	parser.add_argument(
 		"--model-type",
 		required=True,
@@ -51,26 +54,29 @@ def classification_metrics(actual: np.ndarray, predicted: np.ndarray) -> dict[st
 	}
 
 
-def evaluate_classifier(model: Any, features: np.ndarray, records: list[dict[str, Any]]) -> dict[str, Any]:
+def malicious_probabilities(model: Any, features: np.ndarray) -> np.ndarray:
+	if not hasattr(model, "predict_proba"):
+		raise ValueError("Classifier must support predict_proba().")
+	classes = list(getattr(model, "classes_", []))
+	if len(classes) != 2 or set(classes) != {0, 1}:
+		raise ValueError("Classifier must contain classes 0 and 1.")
+	probabilities = np.asarray(model.predict_proba(features))[:, classes.index(1)]
+	if not np.all(np.isfinite(probabilities)) or np.any((probabilities < 0) | (probabilities > 1)):
+		raise ValueError("Classifier returned invalid probabilities.")
+	return probabilities
+
+
+def evaluate_classifier(model: Any, features: np.ndarray, records: list[dict[str, Any]],
+                        threshold: float = DEFAULT_MALICIOUS_THRESHOLD) -> dict[str, Any]:
 	actual = labels_from_records(records)
-	if not hasattr(model, "predict"):
-		raise ValueError("The classifier model does not support predict().")
-
-	predicted = np.asarray(model.predict(features))
+	if not 0 <= threshold <= 1:
+		raise ValueError("Threshold must be between 0 and 1.")
+	probabilities = malicious_probabilities(model, features)
+	predicted = (probabilities >= threshold).astype(int)
 	results = classification_metrics(actual, predicted)
-
-	if hasattr(model, "predict_proba"):
-		probabilities = np.asarray(model.predict_proba(features))
-		classes = np.asarray(getattr(model, "classes_", []))
-		if probabilities.ndim == 2 and probabilities.shape[1] > 1 and 1 in classes:
-			try:
-				malicious_index = int(np.where(classes == 1)[0][0])
-				results["roc_auc"] = roc_auc_score(
-					actual,
-					probabilities[:, malicious_index],
-				)
-			except ValueError:
-				pass
+	results["threshold"] = threshold
+	if len(set(actual)) == 2:
+		results["roc_auc"] = roc_auc_score(actual, probabilities)
 
 	return results
 
@@ -122,7 +128,7 @@ def main() -> None:
 		features = reports_to_matrix(records)
 		model = joblib.load(Path(args.model))
 		if args.model_type == "classifier":
-			results = evaluate_classifier(model, features, records)
+			results = evaluate_classifier(model, features, records, args.threshold)
 		else:
 			results = evaluate_anomaly(model, features, records)
 	except (OSError, ValueError) as exc:
