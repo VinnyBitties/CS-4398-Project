@@ -224,7 +224,7 @@ def run_server(
     anomaly_detector: Any = None,
 ) -> None:
     server = create_server(host, port, threshold, classifier, anomaly_detector)
-    print(f"Listening on http://{host}:{port}")
+    print(f"Listening on http://{host}:{server.server_port}", flush=True)
     print("POST JSON reports from the Azure sandboxed environment to /analyze or /analyze-report")
     try:
         server.serve_forever()

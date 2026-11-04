@@ -1,5 +1,33 @@
 # Synthetic sandbox reports
 
+## Verify the complete workflow
+
+From the repository root, using a Python environment with the project's dependencies:
+
+```powershell
+python -m pip install -r requirements.txt
+python -B -m unittest discover -s ML -p "test_end_to_end.py" -v
+```
+
+This check generates 300 synthetic reports in a temporary directory, exports
+JSON, splits the data, trains and saves both models, tunes the classifier
+threshold on validation data, and evaluates the held-out test partition.
+It uses a small 10-tree classifier to keep verification quick. It then launches
+the actual `predict.py --serve` process with the saved artifacts on an available
+loopback port, verifies model hashes and schemas through `/health`, compares
+HTTP and CLI predictions, and confirms empty telemetry returns HTTP 400.
+The server is stopped and temporary artifacts are removed even on failure.
+This is a pipeline integration check, not an accuracy benchmark or a test of
+the live sandbox/backend. Use the commands below to retain demo artifacts.
+
+Run all regression tests with:
+
+```powershell
+python -B -m unittest discover -s ML -p "test_*.py"
+```
+
+## Generate demo data
+
 `synthetic_reports.py` adapts Diego's `ML/synthetic-reports.py` generator to
 the normalized Sysmon report contract accepted by `report_parser.py` and
 produced by the backend adapter. The underscore filename supports normal
@@ -70,6 +98,21 @@ python ML/evaluate.py --data data/splits/test.json --model models/random_forest.
 python ML/evaluate.py --data data/splits/test.json --model models/isolation_forest.joblib --model-type anomaly
 python ML/predict.py --serve --classifier-model models/random_forest.joblib --anomaly-model models/isolation_forest.joblib --threshold $mlThreshold
 ```
+
+The server defaults to `127.0.0.1:8000`. In a second terminal, verify startup
+and send one held-out report (not the surrounding `{report, label}` record):
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/health | ConvertTo-Json -Depth 10
+$mlTestRecords = Get-Content data/splits/test.json -Raw | ConvertFrom-Json
+$mlRequest = $mlTestRecords[0].report | ConvertTo-Json -Depth 30
+Invoke-RestMethod http://127.0.0.1:8000/analyze -Method Post -ContentType "application/json" -Body $mlRequest
+```
+
+For a backend running on the same machine, use
+`BEHAVIORAL_ML_URL=http://127.0.0.1:8000/analyze`. A backend running elsewhere
+needs an address reachable from its host; its localhost refers to itself.
+Stop the foreground prediction server with Ctrl+C.
 
 Splitting defaults to 60% training, 20% validation, and 20% test within each
 class, with rounding and at least one record of each class per partition.
