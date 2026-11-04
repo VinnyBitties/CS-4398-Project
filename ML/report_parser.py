@@ -76,6 +76,13 @@ def normalize_report(report: dict[str, Any]) -> dict[str, Any]:
     """
     if not isinstance(report, dict):
         raise ValueError("Report must be a JSON object")
+    # Collection failures are not observations of benign behavior. Check both
+    # locations because sandbox errors may accompany otherwise valid counts.
+    for source in (report, _as_dict(report.get("telemetry"))):
+        if source.get("parse_error") or source.get("error"):
+            raise ValueError("TELEMETRY_ERROR: sandbox execution or log collection failed")
+    if report.get("execution_succeeded") is False or report.get("telemetry_collected") is False:
+        raise ValueError("TELEMETRY_ERROR: sandbox execution or log collection failed")
     sandbox = any(key in report for key in
                   ("job_id", "summary", "file_drops", "remote_threads")) or isinstance(report.get("network"), list)
     if not sandbox:
@@ -146,6 +153,13 @@ def extract_features(report: dict[str, Any]) -> dict[str, int]:
         behavior,
         ["processes", "processes_created", "num_processes_created"],
     )
+
+    # Signatures alone cannot establish that this run collected telemetry.
+    # Zero activity is inconclusive; do not send it to training or scoring.
+    if not any((processes_created, files_written, registry_keys_set,
+                network_connections, dns_requests,
+                _as_dict(report.get("summary")).get("remote_threads_injected", 0))):
+        raise ValueError("NO_TELEMETRY: no activity was collected; analysis is inconclusive")
 
     max_signature_severity = max(
         (_safe_int(signature.get("severity"), 0) for signature in signatures),
@@ -253,7 +267,7 @@ def _raw_persistence_matches(report: dict[str, Any]) -> list[str]:
     process_events = _as_list(report.get("processes"))
 
     for event in registry_events:
-        text = _event_text(event, ("path", "key", "key_path", "registry_path", "name", "value_name"))
+        text = _event_text(event, ("target_object", "path", "key", "key_path", "registry_path", "name", "value_name"))
         if _contains_persistence_keyword(text):
             matches.append(f"registry persistence path: {text}")
 
@@ -282,26 +296,23 @@ def _contains_persistence_keyword(text: str) -> bool:
     normalized = text.lower().replace("/", "\\")
     return bool(
         re.search(r"(?:^|\\)(?:run|runonce)(?:\\|$)", normalized)
-        or "currentversion\\run" in normalized
-        or "currentversion\\runonce" in normalized
         or _contains_scheduled_task_keyword(normalized)
         or any(keyword in normalized for keyword in ("autorun", "startup", "persistence"))
     )
 
 
 def _contains_scheduled_task_keyword(text: str) -> bool:
-    normalized = text.lower()
-    return any(
-        marker in normalized
-        for marker in (
-            "schtasks",
-            "scheduled task",
-            "scheduled-task",
-            "scheduledtask",
-            "register-scheduledtask",
-            "new-scheduledtask",
-        )
+    # Match operations that register/change persistence, not /Query, /Run,
+    # /Delete, Get-ScheduledTask, or New-ScheduledTask (an unsaved object).
+    schtasks = re.search(
+        r'(?:^|[\\\s"\'])schtasks(?:\.exe)?["\']?\s+/(?:create|change)\b',
+        text, re.IGNORECASE,
     )
+    powershell = re.search(
+        r'(?<![\w-])(?:register|set)-scheduledtask(?![\w-])',
+        text, re.IGNORECASE,
+    )
+    return bool(schtasks or powershell)
 
 
 def _count_network_connections(network: dict[str, Any]) -> int:
@@ -315,7 +326,7 @@ def _count_network_connections(network: dict[str, Any]) -> int:
         return len(hosts)
 
     total = 0
-    for key in ("tcp", "udp", "icmp", "http", "dns"):
+    for key in ("tcp", "udp", "icmp", "http"):
         total += len(_as_list(network.get(key)))
     return total
 
