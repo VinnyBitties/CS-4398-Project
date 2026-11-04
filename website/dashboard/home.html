@@ -4,31 +4,27 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Coin Flip Defense - Home</title>
-	<link rel="icon" type="image/svg+xml" href="../icon.svg">
+	<link rel="icon" type="image/svg+xml" href="../head.svg">
 	<link rel="stylesheet" href="dashboard.css">
+	<link rel="stylesheet" href="home.css">
 	<style>
-	.content-container {
-		display: block;
-		background: linear-gradient(
-			135deg,
-			#d99b20,
-			#ffe082
-		);
-	}
 	
 	.coin-container {
-		/*width: 150px;
-		height: 150px;*/
+		width: 150px;
+		height: 150px;
 		position: relative;
 		display: flex;
 		justify-content: center;
 		perspective: 1000px;
 		margin: 50px auto;
+		font-size: 60px;
 	}
 		
-		.coin {
-		width: 150px;
-		height: 150px;
+	.coin {
+		/*width: 150px;
+		height: 150px;*/
+		width: 100%;
+		height: 100%;
 		position: relative;
 		transform-style: preserve-3d;
 	}
@@ -55,7 +51,7 @@
 		
 		border: 8px solid #b77b0b;
 		
-		font-size: 60px;
+		/*font-size: 60px;*/
 		font-weight: bold;
 		
 		backface-visibility: hidden;
@@ -68,7 +64,7 @@
 		
 		/* Continuous spinning */
 	.spinning {
-		animation: spin 0.2s linear infinite;
+		animation: spin 0.7s linear infinite;
 	}
 		
 	@keyframes spin {
@@ -87,64 +83,125 @@
 		transition: transform 2.5s cubic-bezier(.05, .7, .15, 1);
 	}
 	
-	.drop-zone-container {
-		position: relative;
-		display: flex;
-		justify-content: center;
-	}
-	
-	/*SOURCE: https://developer.mozilla.org/en-US/docs/Web/API/HTML_Drag_and_Drop_API/File_drag_and_drop*/
-	#drop-zone {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 300px;
-		height: 200px;
-		padding: 1em;
-		border: 3px solid #cccccc;
-		border-radius: 4px;
-		color: slategray;
-		cursor: pointer;
-		color: white;
-		background: radial-gradient(circle, #d9b05f, #2225);
-	}
-	
-	#file-input {
-		display: none;
-	}
 	</style>
 </head>
 <body>
-	<script>
-	const params = new URLSearchParams(window.location.search);
-	const loginstatus = params.get("login");
-	console.log("login status: " + loginstatus);
-	</script>
 	
 	<nav class="sidebar">
 		<a id="here">Home</a>
-		<a href="reports">Reports</a>
+		<a href="reports.html">Reports</a>
+		<div class="account" id="account"></div>
 	</nav>
 	<audio src="coin-flip.mp3" id="coinFlip"></audio>
-	<div class="content-container">
-		<div class="coin-container">
-			<div class="coin" id="coin">
-				<div class="side heads">H</div>
-				<div class="side tails">T</div>
+	<div class="page">
+		<div class="content-container">
+			<div class="coin-container">
+				<div class="coin" id="main-coin">
+					<div class="side heads">H</div>
+					<div class="side tails">T</div>
+				</div>
 			</div>
-		</div>
-		<div class="drop-zone-container">
-			<label id="drop-zone">
-				Click or drop to upload.
-				<input type="file" id="file-input" accept=".exe" />
-			</label>
+			<div class="input-container" id="submitContent">
+				<div class="drop-zone-container">
+					<label id="drop-zone">
+						<span id="drop-zone-text">Click or drop to upload.</span>
+						<input type="file" id="file-input" accept=".exe" />
+					</label>
+				</div>
+				<div class="link-container">
+					<label>
+						Or enter link: 
+						<input type="text" id="link-input" class="link-input" placeholder="Enter link"></input>
+					</label>
+				</div>
+				<div class="submit-file-link-check">
+					<button onClick="sendOff()">Submit</button>
+				</div>
+			</div>
+			<div class="progress-container" id="progressContent">
+				<h2>Progress: <span id="inspecting"></span></h2>
+				<div id="scan-message"></div>
+				<div class="progress-step">
+					<div class="coin" id="coin-step1">
+						<div class="side heads">H</div>
+						<div class="side tails">T</div>
+					</div>
+					<div class="progress-step-content">
+						<div class="progress-type">1. Signature</div>
+						<div class="progress-state waiting" id="progress-state-step1">Waiting</div>
+					</div>
+				</div>
+				<div class="progress-step">
+					<div>
+						<div class="coin" id="coin-step2">
+							<div class="side heads">H</div>
+							<div class="side tails">T</div>
+						</div>
+					</div>
+					<div class="progress-step-content">
+						<div class="progress-type"><b>2. Static Analysis</b></div>
+						<div class="progress-state waiting" id="progress-state-step2">Waiting</div>
+					</div>
+				</div>
+				<div class="progress-step">
+					<div>
+						<div class="coin" id="coin-step3">
+							<div class="side heads">H</div>
+							<div class="side tails">T</div>
+						</div>
+					</div>
+					<div class="progress-step-content">
+						<div class="progress-type">3. Static ML Score</div>
+						<div class="progress-state waiting" id="progress-state-step3">Waiting</div>
+					</div>
+				</div>
+				<div class="progress-step">
+					<div>
+						<div class="coin" id="coin-step4">
+							<div class="side heads">H</div>
+							<div class="side tails">T</div>
+						</div>
+					</div>
+					<div class="progress-step-content">
+						<div class="progress-type">4. Sandbox</div>
+						<div class="progress-state waiting" id="progress-state-step4">Waiting</div>
+					</div>
+				</div>
+				<div class="progress-step">
+					<div>
+						<div class="coin" id="coin-step5">
+							<div class="side heads">H</div>
+							<div class="side tails">T</div>
+						</div>
+					</div>
+					<div class="progress-step-content">
+						<div class="progress-type">5. Behavioral ML Score</div>
+						<div class="progress-state waiting" id="progress-state-step5">Waiting</div>
+					</div>
+				</div>
+				<div class="progress-step">
+					<div>
+						<div class="coin" id="coin-step6">
+							<div class="side heads">H</div>
+							<div class="side tails waiting">T</div>
+						</div>
+					</div>
+					<div class="progress-step-content">
+						<div class="progress-type">6. Report</div>
+						<div class="progress-state waiting" id="progress-state-step6">Waiting</div>
+					</div>
+				</div>
+				<div class="scan-again-container">
+					<button id="scan-again" onclick="resetScan()">Scan another</button>
+				</div>
+			</div>
 		</div>
 	</div>
 	<script>
 	let spinning = false;
 	let rotation = 0;
 
-	const coin = document.getElementById("coin");
+	const coin = document.getElementById("main-coin");
 	const result = document.getElementById("result");
 	
 	function stopSignal() {
@@ -171,10 +228,6 @@
 		}
 		coin.classList.add("landing");
 		coin.style.transform = `rotateY(${rotation}deg)`;
-		
-		setTimeout(() => {
-			result.textContent = heads ? "Heads!" : "Tails!";
-		}, 1500);
 	}
 	
 	function startSignal() {
@@ -188,6 +241,42 @@
 		playSound();
 	}
 	
+	const progressState = [document.getElementById("progress-state-step1"), document.getElementById("progress-state-step2"),
+							document.getElementById("progress-state-step3"), document.getElementById("progress-state-step4"),
+							document.getElementById("progress-state-step5"), document.getElementById("progress-state-step6")];
+	
+	const coins = [document.getElementById("coin-step1"), document.getElementById("coin-step2"), document.getElementById("coin-step3"),
+					document.getElementById("coin-step4"), document.getElementById("coin-step5"), document.getElementById("coin-step6")];
+	
+	if(progressState.length !== coins.length) {
+		alert("Inconsistent Steps");
+		throw new Error(`Inconsistent steps: ${progressState.length} ${coins.length}`);
+	}
+	
+	function startStep(step) {
+		if(step < 1 || step > coins.length) return;
+		coins[step - 1].classList.add("spinning");
+		coins[step - 1].classList.remove("landing");
+		void coins[step - 1].offsetWidth;
+		
+		progressState[step - 1].classList.replace("waiting", "running");
+		progressState[step - 1].textContent = "Running";
+	}
+	
+	function endStep(step) {
+		coins[step - 1].classList.remove("spinning");
+		void coins[step - 1].offsetWidth;
+		
+		rotation += 360;
+		rotation = Math.ceil((rotation - 180) / 360) * 360 + 180;
+		
+		coins[step - 1].classList.add("landing");
+		coins[step - 1].style.transform = `rotateY(${rotation}deg)`;
+		
+		progressState[step - 1].classList.replace("running", "complete");
+		progressState[step - 1].textContent = "Complete";
+	}
+	
 	const coinSound = document.getElementById("coinFlip");
 	function playSound() {
 		coinSound.currentTime = 0;
@@ -196,6 +285,15 @@
 	
 	const fileInput = document.getElementById("file-input");
 	const dropZone = document.getElementById("drop-zone");
+	const dropZoneText = document.getElementById("drop-zone-text");
+	const linkValue = document.getElementById("link-input");
+	
+	let submitValue = null;
+	
+	linkValue.addEventListener("keyup", (e) => {
+		dropZoneText.textContent = "Click or drop to upload."
+		submitValue = linkValue.value;
+	});
 	
 	function handleFile(file) {
 		if (!file) return;
@@ -206,11 +304,11 @@
 			return;
 		}
 	
-		console.log(file.name);
+		dropZoneText.textContent = file.name;
 	
-		dropZone.textContent = file.name;
-	
-		startSignal();
+		//startSignal();
+		linkValue.value = "";
+		submitValue = file;
 	}
 	
 	// Normal click-to-upload
@@ -244,6 +342,175 @@
 		const file = e.dataTransfer.files[0];
 		handleFile(file);
 	});
+	
+	const submitContent = document.getElementById("submitContent");
+	const progressContent = document.getElementById("progressContent");
+	const inspecting = document.getElementById("inspecting");
+	
+	const scanMessage = document.getElementById("scan-message");
+	const scanAgain = document.getElementById("scan-again");
+
+	// Backend pipeline stage -> progress step (1-based), in pipeline order.
+	const STAGE_STEPS = {
+		signature: 1,
+		static_analysis: 2,
+		static_ml: 3,
+		sandbox: 4,
+		behavioral_ml: 5,
+		llm: 6,
+	};
+	const POLL_MS = 1500;
+
+	let scanning = false;
+	let pollTimer = null;
+	let stepShown = []; // what each step currently shows: waiting | running | complete | failed | skipped
+
+	function setStepLabel(step, state, text) {
+		const el = progressState[step - 1];
+		el.classList.remove("waiting", "running", "complete", "failed", "skipped");
+		el.classList.add(state);
+		el.textContent = text;
+		stepShown[step - 1] = state;
+	}
+
+	function failStep(step, message) {
+		coins[step - 1].classList.remove("spinning");
+		setStepLabel(step, "failed", "Failed" + (message ? ": " + message : ""));
+	}
+
+	// Move each step's coin and label to match the stage results so far.
+	function showResults(results) {
+		for (const r of results) {
+			const step = STAGE_STEPS[r.stage];
+			if (!step) continue;
+			const shown = stepShown[step - 1];
+			if (r.status === "running" && shown === "waiting") {
+				startStep(step);
+				stepShown[step - 1] = "running";
+			} else if (r.status === "complete" && shown !== "complete") {
+				if (shown === "waiting") startStep(step);
+				endStep(step);
+				stepShown[step - 1] = "complete";
+			} else if (r.status === "failed" && shown !== "failed") {
+				failStep(step, r.error && r.error.message);
+			}
+		}
+	}
+
+	// One line summing up what the finished stages found.
+	function summarize(sample) {
+		const find = (name) => sample.results.find((r) => r.stage === name && r.status === "complete");
+		const lines = [];
+		if (sample.signature_match === true) {
+			const sig = find("signature");
+			const match = sig && sig.report && sig.report.match;
+			lines.push("Known malicious signature matched" + (match && match.name ? " (" + match.name + ")" : "") + ".");
+		} else if (sample.signature_match === false) {
+			lines.push("No known signature matched.");
+		}
+		const ml = find("behavioral_ml");
+		if (ml && ml.report) {
+			const level = ml.report.risk_level || (ml.report.malicious ? "malicious" : "benign");
+			const score = typeof ml.report.risk_score === "number" ? " (score " + ml.report.risk_score + ")" : "";
+			lines.push("Behavioral risk: " + level + score + ".");
+		}
+		return lines.join(" ");
+	}
+
+	function finishScan(sample, errorText) {
+		clearTimeout(pollTimer);
+		scanning = false;
+		stopSignal();
+		// Stages that never ran (planned, or turned off on the server).
+		for (let step = 1; step <= coins.length; step++) {
+			if (stepShown[step - 1] === "waiting" || stepShown[step - 1] === "running") {
+				coins[step - 1].classList.remove("spinning");
+				setStepLabel(step, "skipped", errorText ? "Not run" : "Skipped");
+			}
+		}
+		scanMessage.className = errorText ? "error" : "";
+		scanMessage.textContent = errorText || (sample ? summarize(sample) : "");
+		scanAgain.style.display = "inline-block";
+	}
+
+	async function poll(sampleId) {
+		const res = await scans.get(sampleId);
+		if (!scanning) return;
+		if (!res.ok) {
+			// A network blip: keep trying. Anything else ends the scan view.
+			if (res.status === 0) {
+				pollTimer = setTimeout(() => poll(sampleId), POLL_MS * 2);
+				return;
+			}
+			finishScan(null, errorMessage(res, "Lost track of the scan."));
+			return;
+		}
+		const sample = res.data;
+		showResults(sample.results);
+		if (sample.status === "completed") {
+			finishScan(sample);
+		} else if (sample.status === "failed") {
+			finishScan(sample, "The scan stopped with an error" + (sample.job && sample.job.error ? ": " + sample.job.error : "."));
+		} else {
+			pollTimer = setTimeout(() => poll(sampleId), POLL_MS);
+		}
+	}
+
+	async function sendOff() {
+		if (scanning || submitValue == null) return;
+
+		let request;
+		if (typeof submitValue === "string") {
+			const url = submitValue.trim();
+			if (url === "") return;
+			inspecting.textContent = url;
+			request = () => scans.submitLink(url);
+		} else if (submitValue instanceof File && submitValue.name.toLowerCase().endsWith(".exe")) {
+			const file = submitValue;
+			inspecting.textContent = file.name;
+			request = () => scans.submitFile(file);
+		} else {
+			return;
+		}
+
+		scanning = true;
+		stepShown = coins.map(() => "waiting");
+		scanMessage.className = "";
+		scanMessage.textContent = "Submitting...";
+		scanAgain.style.display = "none";
+		submitContent.style.display = "none";
+		progressContent.style.display = "block";
+		startSignal();
+
+		const res = await request();
+		if (!res.ok) {
+			finishScan(null, errorMessage(res, "The server did not accept the submission."));
+			return;
+		}
+		scanMessage.textContent = "Scanning...";
+		showResults(res.data.results || []);
+		poll(res.data.sample_id);
+	}
+
+	// Back to the upload form, with every step reset to Waiting.
+	function resetScan() {
+		clearTimeout(pollTimer);
+		scanning = false;
+		for (let step = 1; step <= coins.length; step++) {
+			coins[step - 1].classList.remove("spinning", "landing");
+			coins[step - 1].style.transform = "";
+			setStepLabel(step, "waiting", "Waiting");
+		}
+		scanMessage.textContent = "";
+		submitValue = null;
+		fileInput.value = "";
+		linkValue.value = "";
+		dropZoneText.textContent = "Click or drop to upload.";
+		progressContent.style.display = "none";
+		submitContent.style.display = "";
+	}
 	</script>
+	<script src="../api.js"></script>
+	<script>renderAccount("account", "../index.html");</script>
 </body>
 </html>
