@@ -84,17 +84,25 @@
 	}
 	
 	</style>
+	<link rel="stylesheet" href="../retro.css">
+	<link rel="stylesheet" href="../retro-pages.css">
+	<script src="../retro-loading.js" defer></script>
 </head>
-<body>
+<body class="home-page">
 	
-	<nav class="sidebar">
-		<a id="here">Home</a>
+	<nav class="sidebar" aria-label="Main navigation" data-retro-render>
+		<div class="brand"><span class="brand-coin" aria-hidden="true">◒</span> Coin Flip<br>Defense<br><small>~ cyber headquarters ~</small></div>
+		<a id="here" href="home.html" aria-current="page">Home</a>
 		<a href="reports.html">Reports</a>
 		<div class="account" id="account"></div>
+		<div class="web-badges" aria-hidden="true"><span>100%<br>HTML POWERED</span><span>NO FRILLS<br>ALL SCANS</span></div>
 	</nav>
 	<audio src="coin-flip.mp3" id="coinFlip"></audio>
-	<div class="page">
-		<div class="content-container">
+	<main class="page" tabindex="-1">
+		<header class="page-heading" data-retro-render><div><p class="eyebrow">:: WELCOME TO THE SCAN CENTER ::</p><h1>Coin Flip Defense</h1><p class="muted">Upload a file. Inspect the outcome.</p></div><a class="button primary" href="reports.html">[ Scan reports ]</a></header>
+		<div class="welcome-strip" data-retro-render>★ SCAN CENTER ONLINE ★ Choose a file or submit a link below.</div>
+		<div class="content-container retro-panel" data-retro-render>
+			<h2 class="window-title">New scan</h2>
 			<div class="coin-container">
 				<div class="coin" id="main-coin">
 					<div class="side heads">H</div>
@@ -193,10 +201,12 @@
 				</div>
 				<div class="scan-again-container">
 					<button id="scan-again" onclick="resetScan()">Scan another</button>
+					<a id="view-results" hidden>View results →</a>
 				</div>
 			</div>
 		</div>
-	</div>
+		<footer class="retro-footer" data-retro-render><p>Thanks for visiting Coin Flip Defense!</p><p><a href="home.html">[ Home ]</a> · <a href="reports.html">[ Reports ]</a> · <a href="#">[ Back to top ]</a></p><small>— Your next scan starts here. —</small></footer>
+	</main>
 	<script>
 	let spinning = false;
 	let rotation = 0;
@@ -349,6 +359,7 @@
 	
 	const scanMessage = document.getElementById("scan-message");
 	const scanAgain = document.getElementById("scan-again");
+	const viewResults = document.getElementById("view-results");
 
 	// Backend pipeline stage -> progress step (1-based), in pipeline order.
 	const STAGE_STEPS = {
@@ -488,12 +499,16 @@
 			return;
 		}
 		scanMessage.textContent = "Scanning...";
+		viewResults.href = "reports.html?sample_id=" + encodeURIComponent(res.data.sample_id);
+		viewResults.hidden = false;
 		showResults(res.data.results || []);
 		poll(res.data.sample_id);
 	}
 
 	// Back to the upload form, with every step reset to Waiting.
 	function resetScan() {
+		viewResults.hidden = true;
+		viewResults.removeAttribute("href");
 		clearTimeout(pollTimer);
 		scanning = false;
 		for (let step = 1; step <= coins.length; step++) {
