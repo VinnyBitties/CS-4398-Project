@@ -9,15 +9,19 @@ where `report` is the shape llm_analyzer.build_security_prompt() reads
 (filename, sha256, static_analysis, ml_analysis, dynamic_analysis).
 
 Writes one JSON object on stdout:
-    {"threat_intel": [...], "prompt": "...", "explanation": null,
-     "explanation_status": "not_generated"}
+    {"threat_intel": [...], "prompt": "...", "explanation": "..." | null,
+     "explanation_status": "generated" | "skipped" | "error" | "not_generated",
+     "explanation_error": "..."}   # only when status is "skipped" or "error"
 
-The LLM/Threat Intelligence component does not call an LLM yet, so there is
-no explanation to return. When it does, this script is the one place on the
-backend side that changes: call it after building the prompt and fill in
-`explanation`.
+The written explanation comes from llm_analyzer.generate_llm_explanation()
+(Groq). It is optional, so a missing explanation never fails the stage:
+  - "skipped":       GROQ_API_KEY is not set, so the LLM was not called.
+  - "error":         the LLM call raised (network, bad key, rate limit...).
+  - "not_generated": the component has no generate_llm_explanation().
+Threat intel and the prompt are still returned in all three cases.
 
-On failure: exit 1 with {"error": ..., "message": ...} on stderr, the same
+On failure (missing component, bad input, or threat intel / prompt building
+raising): exit 1 with {"error": ..., "message": ...} on stderr, the same
 contract malware_detection/analyze.py uses.
 """
 
@@ -42,7 +46,8 @@ def main():
     # llm_analyzer.py imports threat_intel as a sibling module.
     sys.path.insert(0, llm_dir)
     try:
-        from llm_analyzer import build_security_prompt, generate_llm_explanation
+        import llm_analyzer
+        from llm_analyzer import build_security_prompt
         from threat_intel import analyze_indicator
     except Exception as exc:  # noqa: BLE001 -- report any import problem as JSON
         fail("LlmImportError", f"{type(exc).__name__}: {exc}")
@@ -58,19 +63,34 @@ def main():
     try:
         threat_intel = [analyze_indicator(i["indicator"], i["type"]) for i in indicators]
         prompt = build_security_prompt(report)
-        explanation = generate_llm_explanation(report)
     except Exception as exc:  # noqa: BLE001
         fail(type(exc).__name__, str(exc))
 
-    json.dump(
-        {
-            "threat_intel": threat_intel,
-            "prompt": prompt.strip(),
-            "explanation": explanation,
-            "explanation_status": "generated",
-        },
-        sys.stdout,
-    )
+    out = {"threat_intel": threat_intel, "prompt": prompt.strip()}
+    out.update(explain(llm_analyzer, report))
+    json.dump(out, sys.stdout)
+
+
+def explain(llm_analyzer, report):
+    """Ask the component for a written explanation. Never raises."""
+    generate = getattr(llm_analyzer, "generate_llm_explanation", None)
+    if generate is None:
+        return {"explanation": None, "explanation_status": "not_generated"}
+    if not os.environ.get("GROQ_API_KEY", "").strip():
+        return {
+            "explanation": None,
+            "explanation_status": "skipped",
+            "explanation_error": "GROQ_API_KEY is not set, so no written explanation was generated.",
+        }
+    try:
+        explanation = generate(report)
+    except Exception as exc:  # noqa: BLE001 -- the explanation is optional
+        return {
+            "explanation": None,
+            "explanation_status": "error",
+            "explanation_error": f"{type(exc).__name__}: {exc}",
+        }
+    return {"explanation": explanation, "explanation_status": "generated"}
 
 
 if __name__ == "__main__":
