@@ -1,0 +1,166 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scan reports · Coin Flip Defense</title>
+  <link rel="icon" type="image/svg+xml" href="../tail.svg">
+  <link rel="stylesheet" href="dashboard.css">
+  <link rel="stylesheet" href="reports.css">
+  <link rel="stylesheet" href="../retro.css">
+  <link rel="stylesheet" href="static-evidence.css">
+  <script src="../retro-loading.js" defer></script>
+  <script src="../api.js" defer></script>
+  <script src="reports-data.js" defer></script>
+  <script src="static-evidence.js" defer></script>
+  <script src="reports.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#scan-dashboard">Skip to scan results</a>
+  <nav class="sidebar" aria-label="Main navigation">
+    <div class="brand"><span class="brand-coin" aria-hidden="true">◒</span> Coin Flip<br>Defense<br><small>~ cyber headquarters ~</small></div>
+    <a href="home.html">Home</a>
+    <a id="here" href="reports.html" aria-current="page">Reports</a>
+    <div class="account" id="account"></div>
+    <div class="web-badges" aria-hidden="true"><span>100%<br>HTML POWERED</span><span>NO FRILLS<br>ALL REPORTS</span></div>
+  </nav>
+  <main class="page">
+    <div id="retro-loading" class="retro-loading" hidden>
+      <span>Rendering page…</span><span class="retro-loading-blocks" aria-hidden="true">▰ ▰ ▰ ▰ ▰</span>
+      <button id="skip-render" type="button">Skip animation</button>
+    </div>
+    <header class="page-heading">
+      <div>
+        <p class="eyebrow">:: WELCOME TO THE REPORT CENTER ::</p>
+        <h1>Scan reports</h1>
+        <p class="muted">Your scan results on the World Wide Web.</p>
+      </div>
+      <a class="button primary" href="home.html">[ New scan ]</a>
+    </header>
+    <div class="welcome-strip"><strong>★ SCAN REPORTS ONLINE ★</strong> Choose a scan below to inspect its results. <span aria-hidden="true">★</span></div>
+    <div class="workspace">
+      <aside class="history panel" aria-labelledby="history-heading">
+        <div class="section-heading">
+          <h2 id="history-heading">Scan history</h2>
+          <button id="refresh-history" class="text-button">Refresh</button>
+        </div>
+        <p id="history-message" class="muted" role="status">Loading scans…</p>
+        <button id="retry-history" hidden>Retry history</button>
+        <ul id="history-list" class="history-list"></ul>
+        <nav class="pagination" aria-label="Scan history pages">
+          <button id="previous-page" aria-label="Previous history page" disabled>←</button>
+          <span id="page-label">Page 1</span>
+          <button id="next-page" aria-label="Next history page" disabled>→</button>
+        </nav>
+      </aside>
+      <section id="scan-dashboard" class="scan-dashboard" tabindex="-1" aria-label="Selected scan">
+        <div id="detail-message" class="notice" role="status">Select a scan to see its results.</div>
+        <button id="retry-detail" hidden>Retry scan</button>
+        <div id="scan-content" hidden>
+          <header class="scan-header panel">
+            <div class="section-heading">
+              <span id="sample-label" class="eyebrow"></span>
+              <span id="job-status" class="badge"></span>
+            </div>
+            <h2 id="sample-name"></h2>
+            <p id="sample-date" class="muted"></p>
+            <details>
+              <summary>SHA-256 fingerprint</summary>
+              <code id="sample-hash"></code>
+              <button id="copy-fingerprint" class="text-button" type="button">Copy fingerprint</button>
+              <span id="fingerprint-feedback" role="status" class="muted"></span>
+            </details>
+          </header>
+
+          <section id="static-pe-panel" class="panel static-pe-panel" aria-labelledby="static-pe-heading">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">STATIC ANALYSIS · FILE INTELLIGENCE</p>
+                <h3 id="static-pe-heading">Portable Executable evidence</h3>
+              </div>
+              <span id="static-pe-status" class="badge">Pending</span>
+            </div>
+            <p id="static-pe-message" class="muted" role="status">Waiting for a scan.</p>
+            <div id="static-pe-overview" class="static-pe-grid" hidden></div>
+            <div id="static-pe-details" class="static-pe-details" hidden></div>
+          </section>
+
+          <div id="signature-alert" class="notice signature-alert" hidden></div>
+          <div id="synthetic-notice" class="notice" hidden>Synthetic report — these events are simulated.</div>
+
+          <section class="panel stage-panel" aria-labelledby="stages-heading">
+            <div class="section-heading">
+              <h3 id="stages-heading">Analysis stages</h3>
+              <span class="muted">Each stage reports independently</span>
+            </div>
+            <ol id="stage-list" class="stage-list"></ol>
+          </section>
+
+          <div class="charts-grid">
+            <section class="panel risk-panel" aria-labelledby="risk-heading">
+              <p class="eyebrow">BEHAVIORAL ANALYSIS</p>
+              <h3 id="risk-heading">Risk score</h3>
+              <div id="risk-gauge" class="risk-gauge" role="img" aria-label="Risk score unavailable">
+                <svg viewBox="0 0 200 200" aria-hidden="true">
+                  <circle class="gauge-track" cx="100" cy="100" r="80" pathLength="100"/>
+                  <circle id="gauge-fill" cx="100" cy="100" r="80" pathLength="100" stroke-dasharray="0 100"/>
+                </svg>
+                <div class="gauge-value">
+                  <strong id="risk-value">—</strong>
+                  <span id="risk-scale">Unavailable</span>
+                </div>
+              </div>
+              <span id="risk-level" class="badge"></span>
+              <p id="risk-source"></p>
+              <p id="risk-threshold" class="muted"></p>
+              <p class="fine-print">A behavioral score, not a measure of detection accuracy.</p>
+            </section>
+            <section class="panel activity-panel" aria-labelledby="activity-heading">
+              <p class="eyebrow">SANDBOX DETONATION</p>
+              <h3 id="activity-heading">Observed activity</h3>
+              <p id="activity-message" class="muted"></p>
+              <div id="activity-bars" aria-hidden="true"></div>
+              <details class="counts-details">
+                <summary>View activity counts as a table</summary>
+                <table>
+                  <caption class="sr-only">Observed sandbox activity</caption>
+                  <thead><tr><th scope="col">Event type</th><th scope="col">Count</th></tr></thead>
+                  <tbody id="activity-counts"></tbody>
+                </table>
+              </details>
+            </section>
+          </div>
+
+          <section class="panel anomaly-panel" aria-labelledby="anomaly-heading">
+            <div>
+              <p class="eyebrow">ISOLATION FOREST</p>
+              <h3 id="anomaly-heading">Unusual behavior</h3>
+              <p class="muted">An anomaly is not automatically a malware verdict.</p>
+            </div>
+            <div>
+              <strong id="anomaly-result">Unavailable</strong>
+              <p id="anomaly-score" class="muted"></p>
+            </div>
+          </section>
+
+          <section class="panel evidence-panel" aria-labelledby="evidence-heading">
+            <div class="section-heading">
+              <h3 id="evidence-heading">Evidence &amp; events</h3>
+              <span class="muted">Reported observations</span>
+            </div>
+            <p id="signature-result"></p>
+            <ul id="ml-evidence"></ul>
+            <div id="event-tables"></div>
+          </section>
+        </div>
+      </section>
+    </div>
+    <footer class="retro-footer">
+      <p>Thanks for visiting Coin Flip Defense!</p>
+      <p><a href="home.html">[ Home ]</a> · <a href="reports.html">[ Reports ]</a> · <a href="#">[ Back to top ]</a></p>
+      <small>— You have reached the end of this page. —</small>
+    </footer>
+  </main>
+</body>
+</html>
