@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   test:
-    name: Python 3.14 / ${{ matrix.os }}
+    name: Python 3.13 / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     strategy:
@@ -29,15 +29,21 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+          fetch-depth: 0 # Consumer tests read pinned teammate source with git show.
 
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.14"
+          python-version: "3.13"
           cache: pip
           cache-dependency-path: |
             malware_detection/requirements.txt
             malware_detection/requirements-dev.txt
+
+      - name: Set up Node for actual backend caller checks
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
 
       - name: Install test dependencies
         run: python -m pip install -r malware_detection/requirements-dev.txt

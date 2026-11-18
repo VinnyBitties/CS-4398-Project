@@ -1,5 +1,6 @@
 {
-  "automatic_reviews": false,
+  "automatic_reviews": true,
+  "automatic_closures": true,
   "areas": [
     {
       "id": "sandbox",

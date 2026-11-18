@@ -1,0 +1,245 @@
+
+/* Additive styles for the existing Sentinel report page. */
+
+.static-pe-panel {
+  min-width: 0;
+}
+
+.static-pe-panel .section-heading {
+  align-items: start;
+  margin-bottom: 12px;
+}
+
+.static-pe-panel h3 {
+  margin: 0;
+}
+
+.static-pe-panel > .muted {
+  margin: 8px 0 14px;
+}
+
+.static-pe-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 18px;
+}
+
+.static-pe-field {
+  background: #faf3da;
+  border: 1px solid #e7d5a0;
+  padding: 12px;
+  min-width: 0;
+}
+
+.static-pe-field .static-pe-label {
+  display: block;
+  font-size: 11px;
+  color: #715c2a;
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+
+.static-pe-field .static-pe-value {
+  display: block;
+  font-size: 13px;
+  color: #26241e;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.static-pe-field .static-pe-value.mono {
+  font-family: Consolas, Monaco, monospace;
+  font-size: 12px;
+}
+
+.static-pe-field[data-emphasis="warning"] {
+  background: #fff0df;
+  border-color: #d9a18e;
+}
+
+.static-pe-notice {
+  border-left: 3px solid #a67c28;
+  background: #fff7e3;
+  padding: 10px 12px;
+  font-size: 12px;
+  margin: 10px 0;
+  overflow-wrap: anywhere;
+}
+
+.static-pe-notice.warning {
+  border-left-color: #bd5146;
+  background: #fff0eb;
+}
+
+.static-pe-details {
+  margin-top: 10px;
+}
+
+.static-pe-details > details {
+  border-top: 1px solid #d5c49e;
+  padding: 5px 0;
+}
+
+.static-pe-details > details:last-child {
+  border-bottom: 1px solid #d5c49e;
+}
+
+.static-pe-details > details > summary {
+  font-size: 13px;
+  font-weight: 700;
+  color: #5d471a;
+  padding: 11px 4px;
+}
+
+.static-pe-details > details[open] > summary {
+  color: #302307;
+}
+
+.static-pe-content {
+  min-width: 0;
+  padding: 2px 4px 14px;
+}
+
+.static-pe-content .muted {
+  margin: 6px 0 10px;
+}
+
+.static-pe-table-scroll {
+  overflow: auto;
+  max-height: 350px;
+  border: 1px solid #e6d9bc;
+}
+
+.static-pe-table-scroll table {
+  min-width: 520px;
+  width: 100%;
+  table-layout: auto;
+}
+
+.static-pe-table-scroll th {
+  position: sticky;
+  top: 0;
+  background: #f4ead1;
+  z-index: 1;
+}
+
+.static-pe-table-scroll td {
+  overflow-wrap: anywhere;
+  max-width: 390px;
+}
+
+.static-pe-list {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 10px;
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid #e5d9bf;
+}
+
+.static-pe-list li {
+  margin: 0;
+  border-bottom: 1px solid #ece3cf;
+  padding: 7px 9px;
+  font-size: 12px;
+  font-family: Consolas, Monaco, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.static-pe-list li:last-child {
+  border-bottom: none;
+}
+
+.static-pe-subtitle {
+  margin: 12px 0 4px;
+  font-size: 13px;
+}
+
+.static-pe-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.static-pe-controls input {
+  min-width: 0;
+  width: min(100%, 310px);
+  border: 1px solid #b9a77d;
+  padding: 8px 10px;
+  background: #fffdfa;
+  font: inherit;
+  font-size: 13px;
+  color: #252a29;
+}
+
+.static-pe-controls input:focus-visible {
+  outline: 3px solid #947000;
+  outline-offset: 2px;
+}
+
+.static-pe-more {
+  margin: 8px 0 2px;
+  font-size: 12px;
+}
+
+.static-pe-meta {
+  margin: 8px 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.static-pe-meta > div {
+  border: 1px solid #e6d9bc;
+  padding: 8px;
+  min-width: 0;
+}
+
+.static-pe-meta dt {
+  font-size: 11px;
+  color: #715c2a;
+}
+
+.static-pe-meta dd {
+  margin: 3px 0 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.static-pe-inline {
+  font-size: 12px;
+  margin: 6px 0;
+  overflow-wrap: anywhere;
+}
+
+#fingerprint-feedback {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 12px;
+}
+
+#copy-fingerprint {
+  margin-top: 8px;
+}
+
+@media (max-width: 1100px) {
+  .static-pe-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 570px) {
+  .static-pe-grid,
+  .static-pe-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .static-pe-field {
+    padding: 10px;
+  }
+}

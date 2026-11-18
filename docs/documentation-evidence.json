@@ -1,0 +1,833 @@
+{
+  "metadata": {
+    "project": "Coin-Flip Defense: Sentinel",
+    "course": "CS 4398",
+    "version_date": "2026-11-03",
+    "branch": "dev-branch",
+    "repository": "https://github.com/VinnyBitties/CS-4398-Project",
+    "documentation_strategy": "Evidence-first: source and executable configuration take precedence over historical prose.",
+    "prototype_disclaimer": "Research and demonstration prototype; not a production antivirus, EDR, or safe malware detonation service.",
+    "unknown_value_policy": "Use Not recorded, Not available in this branch, or Requires team confirmation instead of guessing."
+  },
+  "status_vocabulary": [
+    "Implemented",
+    "Integrated",
+    "Partial",
+    "Stubbed/configurable",
+    "Planned/not present",
+    "Not verified"
+  ],
+  "components": {
+    "frontend": {
+      "title": "Frontend dashboard",
+      "purpose": "Provide account access, executable or URL submission, scan progress, and report history views.",
+      "status": "Partial",
+      "present_implementation": [
+        "Static HTML, CSS, and browser JavaScript served by the backend or a separate development server.",
+        "Registration, login, logout, guest access, file selection, drag-and-drop, URL submission, polling, and stage progress display are connected to backend APIs.",
+        "The reports page contains pagination scaffolding but uses an empty in-memory array and does not call the scan-history endpoint."
+      ],
+      "interfaces": [
+        "Calls /api/auth/register, /api/auth/login, /api/auth/logout, and /api/auth/me with cookies.",
+        "Calls POST /api/samples for multipart uploads, POST /api/links for URL submissions, and GET /api/samples/:id while polling.",
+        "Does not currently call GET /api/samples to populate report history."
+      ],
+      "dependencies": [
+        "Modern browser with Fetch, FormData, and JavaScript enabled.",
+        "Sentinel backend at the same origin or http://localhost:3000 with an allowed CORS origin."
+      ],
+      "configuration": [
+        "window.SENTINEL_API_BASE may override API discovery.",
+        "Backend CORS_ORIGINS controls credentialed development origins."
+      ],
+      "tests": {
+        "inventory": [
+          "No dedicated browser or frontend unit-test suite is present.",
+          "Backend auth and API tests exercise the endpoints consumed by the frontend."
+        ],
+        "observed": [
+          "No browser automation was run during the 2026-11-03 documentation update."
+        ],
+        "historical": []
+      },
+      "limitations": [
+        "The reports page is not integrated with scan history.",
+        "No detailed report viewer renders stored stage reports.",
+        "Client-side file validation checks only the .exe extension; the backend accepts the uploaded file and the analyzer decides whether it is a PE.",
+        "Accessibility and cross-browser behavior have not been formally tested."
+      ],
+      "risks": [
+        "Rendered stage state is only as complete as backend results; optional or absent stages appear skipped.",
+        "Inline scripts and alert-based validation limit maintainability and accessibility."
+      ],
+      "evidence": [
+        {
+          "path": "website/index.html",
+          "note": "Account entry and guest workflow."
+        },
+        {
+          "path": "website/api.js",
+          "note": "Shared API, authentication, upload, link, and polling helpers."
+        },
+        {
+          "path": "website/dashboard/home.html",
+          "note": "Submission and progress workflow."
+        },
+        {
+          "path": "website/dashboard/reports.html",
+          "note": "Unconnected report-history scaffold."
+        }
+      ]
+    },
+    "backend": {
+      "title": "Backend API and orchestration",
+      "purpose": "Accept submissions, manage accounts and sessions, persist scan state, queue work, run pipeline stages, and serve the dashboard.",
+      "status": "Partial",
+      "present_implementation": [
+        "Express API with stable JSON errors, multipart upload handling, URL validation, authentication, SQLite or PostgreSQL persistence, and an in-process database-backed job queue.",
+        "Signature and static-analysis stages run by default; sandbox plus behavioral ML are enabled by SANDBOX_URL; LLM/threat intelligence is enabled by LLM_DIR.",
+        "Static ML is explicitly not present in the pipeline stage list.",
+        "The mock static analyzer is the default so local startup does not require pefile."
+      ],
+      "interfaces": [
+        "GET /api/health",
+        "POST /api/auth/register, /api/auth/login, /api/auth/logout; GET /api/auth/me",
+        "POST /api/samples, POST /api/links, GET /api/samples, GET /api/samples/:id",
+        "Python analyzer subprocess emitting one JSON report on stdout.",
+        "Optional multipart sandbox /detonate call, behavioral-ML JSON HTTP call, and Python LLM bridge."
+      ],
+      "dependencies": [
+        "Node.js with express, multer, dotenv, better-sqlite3, pg, and supertest.",
+        "Python 3 for the configured analyzer and LLM bridge.",
+        "SQLite by default or PostgreSQL when DATABASE_URL is set."
+      ],
+      "configuration": [
+        "PORT, WEBSITE_DIR, CORS_ORIGINS",
+        "DATABASE_PATH or DATABASE_URL plus DATABASE_SSL and DATABASE_POOL_SIZE",
+        "PYTHON_PATH, ANALYZER_SCRIPT_PATH, ANALYZER_TIMEOUT_MS",
+        "UPLOAD_DIR, MAX_UPLOAD_BYTES, JOB_CONCURRENCY, WAIT_TIMEOUT_MS, WORKER_ID",
+        "SIGNATURE_CATALOG_PATH and optional SIGNATURE_HASHLIST_PATH",
+        "SANDBOX_URL, SANDBOX_DETONATION_SECONDS, SANDBOX_TIMEOUT_MS, BEHAVIORAL_ML_URL, BEHAVIORAL_ML_TIMEOUT_MS",
+        "LLM_DIR, LLM_BRIDGE_PATH, LLM_TIMEOUT_MS",
+        "SESSION_TTL_HOURS, COOKIE_SECURE, ALLOW_REGISTRATION, MAX_FAILED_LOGINS"
+      ],
+      "tests": {
+        "inventory": [
+          "Eight Node test files cover API, authentication, queueing, catalog validation, HTTP stages, sandbox/ML adapters, LLM stage behavior, and the real analyzer boundary.",
+          "Real-analyzer tests are conditionally skipped when pefile is unavailable."
+        ],
+        "observed": [
+          "npm test did not start on 2026-11-03 because the available Windows npm shim reported that WSL 1 is unsupported."
+        ],
+        "historical": [
+          "backend/README.md records prior passing backend results, but those counts were not re-verified in this environment."
+        ]
+      },
+      "limitations": [
+        "Static ML is not wired into the pipeline.",
+        "The default analyzer is a mock unless ANALYZER_SCRIPT_PATH is changed.",
+        "Sandbox, behavioral ML, and LLM stages depend on external or absent components.",
+        "The in-process queue does not coordinate execution across multiple backend processes; worker ownership avoids processing another host's uploads.",
+        "Guest scanning is permitted by default."
+      ],
+      "risks": [
+        "Uploaded files are stored on the backend host and require an operational retention and deletion policy.",
+        "COOKIE_SECURE defaults to false for local HTTP and must be enabled behind HTTPS.",
+        "Optional integrations can fail independently and leave a scan completed with failed stages."
+      ],
+      "evidence": [
+        {
+          "path": "backend/src/app.js",
+          "note": "Express composition and error boundary."
+        },
+        {
+          "path": "backend/src/config.js",
+          "note": "Runtime defaults and environment variables."
+        },
+        {
+          "path": "backend/src/routes/auth.js",
+          "note": "Account and session endpoints."
+        },
+        {
+          "path": "backend/src/routes/samples.js",
+          "note": "Submission and retrieval endpoints."
+        },
+        {
+          "path": "backend/src/pipeline/stages.js",
+          "note": "Actual stage ordering and feature gates."
+        },
+        {
+          "path": "backend/src/queue/jobQueue.js",
+          "note": "Database-backed in-process queue."
+        },
+        {
+          "path": "backend/src/db.js",
+          "note": "SQLite/PostgreSQL schema and adapter."
+        },
+        {
+          "path": "backend/docs/api-contract.md",
+          "note": "Dashboard API contract."
+        }
+      ]
+    },
+    "malware_detection": {
+      "title": "Static malware detection and PE evidence",
+      "purpose": "Produce bounded, schema-validated PE metadata, hashes, strings, imports, resources, entropy, reputation, and optional YARA evidence.",
+      "status": "Implemented",
+      "present_implementation": [
+        "Python CLI reads a bounded, consistent byte capture and emits report contract 1.2.0 as JSON.",
+        "PE extraction includes headers, sections and permissions, imports and delay imports, resources, bounded strings, parser warnings, and SHA-256.",
+        "Optional offline reputation cache and trusted YARA rule file enrich the report without network access during analysis.",
+        "Schema validation, integration verification, cache update, and YARA helper tools are present."
+      ],
+      "interfaces": [
+        "python3 malware_detection/analyze.py <file> writes one JSON object to stdout and errors to stderr.",
+        "--hash-cache or STATIC_HASH_DB selects the offline reputation database.",
+        "--yara-rules or STATIC_YARA_RULES selects a trusted YARA source file.",
+        "backend/src/analyzer/runAnalyzer.js consumes schema versions 1.0.0 through 1.2.0."
+      ],
+      "dependencies": [
+        "Python 3 and pefile.",
+        "Optional yara-python for real YARA scanning.",
+        "Optional jsonschema for development validation."
+      ],
+      "configuration": [
+        "Default maximum input size is documented and enforced by the analyzer CLI.",
+        "STATIC_HASH_DB and STATIC_YARA_RULES may replace CLI options.",
+        "YARA includes are disabled and scan timeout must be positive."
+      ],
+      "tests": {
+        "inventory": [
+          "Six Python test modules cover bounded capture, extraction, report contract, consumers, reputation, and YARA behavior."
+        ],
+        "observed": [
+          "The suite could not import on 2026-11-03 because pefile is not installed in the active Python environment."
+        ],
+        "historical": [
+          "The component form and README record earlier passing results; they are historical evidence only for this update."
+        ]
+      },
+      "limitations": [
+        "Static evidence is not a final malicious/benign verdict.",
+        "Offline reputation coverage depends entirely on the supplied cache.",
+        "YARA coverage depends on trusted user-supplied rules and the optional engine.",
+        "The backend defaults to its mock analyzer instead of this component."
+      ],
+      "risks": [
+        "Parsing hostile files requires bounded inputs and patched dependencies.",
+        "A match-free report means no configured evidence matched; it does not prove a file is benign."
+      ],
+      "evidence": [
+        {
+          "path": "malware_detection/analyze.py",
+          "note": "Analyzer CLI and report assembly."
+        },
+        {
+          "path": "malware_detection/output_schema.json",
+          "note": "Report schema 1.2.0."
+        },
+        {
+          "path": "malware_detection/REPORT_CONTRACT.md",
+          "note": "Producer/consumer contract."
+        },
+        {
+          "path": "malware_detection/reputation.py",
+          "note": "Offline reputation lookup."
+        },
+        {
+          "path": "malware_detection/yara_scan.py",
+          "note": "Optional YARA integration."
+        },
+        {
+          "path": "malware_detection/tests/test_contract.py",
+          "note": "Contract test inventory."
+        }
+      ]
+    },
+    "machine_learning": {
+      "title": "Behavioral feature extraction and machine learning",
+      "purpose": "Normalize sandbox telemetry, produce behavioral features and heuristic risk, train optional classifier/anomaly models, serve inference, and evaluate labeled data.",
+      "status": "Partial",
+      "present_implementation": [
+        "Report parser validates current sandbox and legacy shapes and produces nine behavioral features.",
+        "Heuristic risk scoring is available without trained models.",
+        "Random Forest classifier and Isolation Forest training scripts save joblib artifacts.",
+        "CLI and ThreadingHTTPServer inference support optional classifier and anomaly artifacts.",
+        "Evaluation reports classification or anomaly metrics from supplied labeled JSON records."
+      ],
+      "interfaces": [
+        "ML/predict.py reads a report from --file or stdin, or serves POST JSON on /, /analyze, and /analyze-report.",
+        "The backend adapter maps sandbox output to the ML report shape and calls BEHAVIORAL_ML_URL.",
+        "Training scripts expect JSON arrays containing reports and labels; evaluation expects a saved .joblib model."
+      ],
+      "dependencies": [
+        "Python 3, joblib, numpy, and scikit-learn."
+      ],
+      "configuration": [
+        "Default HTTP host 127.0.0.1 and port 8000.",
+        "Default malicious threshold comes from ML/config.py.",
+        "--classifier-model and --anomaly-model select trained artifacts."
+      ],
+      "tests": {
+        "inventory": [
+          "ML/test_report_parser.py contains 15 tests for normalization, validation, feature behavior, persistence evidence, and CLI/HTTP model parity."
+        ],
+        "observed": [
+          "The suite could not import on 2026-11-03 because joblib is not installed in the active Python environment."
+        ],
+        "historical": []
+      },
+      "limitations": [
+        "No dataset, trained model, model card, or evaluation output is committed.",
+        "The scripts do not implement a static-PE classifier for the malware_detection report.",
+        "Backend integration is behavioral only and requires the sandbox stage.",
+        "Held-out-family evaluation has not been evidenced in this branch."
+      ],
+      "risks": [
+        "Heuristic risk is not a validated probability and must not be reported as trained-model performance.",
+        "Model quality, class balance, leakage, and licensing cannot be assessed without dataset provenance and artifacts."
+      ],
+      "evidence": [
+        {
+          "path": "ML/report_parser.py",
+          "note": "Normalization, behavioral feature extraction, and heuristic risk."
+        },
+        {
+          "path": "ML/config.py",
+          "note": "Feature columns and thresholds."
+        },
+        {
+          "path": "ML/predict.py",
+          "note": "CLI and HTTP inference."
+        },
+        {
+          "path": "ML/train_classifier.py",
+          "note": "Random Forest training."
+        },
+        {
+          "path": "ML/train_anomaly.py",
+          "note": "Isolation Forest training."
+        },
+        {
+          "path": "ML/evaluate.py",
+          "note": "Evaluation metrics."
+        },
+        {
+          "path": "ML/test_report_parser.py",
+          "note": "Current test inventory."
+        }
+      ]
+    },
+    "dynamic_analysis": {
+      "title": "Dynamic sandbox integration",
+      "purpose": "Detonate files in an isolated, revertible environment and return runtime telemetry for behavioral scoring and reporting.",
+      "status": "Stubbed/configurable",
+      "present_implementation": [
+        "Backend multipart sandbox client, non-overlap lock, response checks, telemetry-shape adapter, feature gate, and mock-service tests are present.",
+        "The referenced dynamic_telemetry sandbox implementation, VM setup, snapshot lifecycle, guest instrumentation, and Sysmon collection code are not present in this branch."
+      ],
+      "interfaces": [
+        "When SANDBOX_URL is set, the backend POSTs the sample and detonation timeout to /detonate.",
+        "The adapter expects usable telemetry and converts known sandbox field names to the ML service shape.",
+        "Links do not run through the sandbox stage."
+      ],
+      "dependencies": [
+        "External sandbox HTTP service and a safely isolated Windows VM.",
+        "Telemetry compatible with backend/src/adapters/sandboxToMl.js."
+      ],
+      "configuration": [
+        "SANDBOX_URL enables the stage.",
+        "SANDBOX_DETONATION_SECONDS defaults to 15 seconds.",
+        "SANDBOX_TIMEOUT_MS defaults to 120000 milliseconds."
+      ],
+      "tests": {
+        "inventory": [
+          "backend/test/sandboxStages.test.js covers client errors, timeouts, serialization, non-overlap, adapters, and pipeline behavior with mock HTTP services."
+        ],
+        "observed": [
+          "Node tests did not start in the current WSL 1/npm environment. No real VM safety or detonation test was run."
+        ],
+        "historical": []
+      },
+      "limitations": [
+        "No runnable sandbox implementation or environment definition exists in this branch.",
+        "Network isolation, reset behavior, sample transfer, log export, and host containment are not verified.",
+        "Remote-thread telemetry may be absent and is represented as zero with adapter notes."
+      ],
+      "risks": [
+        "Real malware execution is unsafe without independently validated containment and restoration.",
+        "A malformed or empty telemetry response must fail the stage rather than be scored as benign."
+      ],
+      "evidence": [
+        {
+          "path": "backend/src/stages/sandboxClient.js",
+          "note": "Sandbox HTTP client and serialization lock."
+        },
+        {
+          "path": "backend/src/adapters/sandboxToMl.js",
+          "note": "Telemetry validation and field mapping."
+        },
+        {
+          "path": "backend/test/sandboxStages.test.js",
+          "note": "Mock integration test inventory."
+        }
+      ]
+    },
+    "llm_threat_intelligence": {
+      "title": "LLM and threat-intelligence integration",
+      "purpose": "Build bounded evidence input, enrich indicators, and eventually generate an evidence-grounded explanation with MITRE ATT&CK mappings.",
+      "status": "Stubbed/configurable",
+      "present_implementation": [
+        "Backend adapter collects bounded earlier-stage evidence and filters selected standalone IP indicators when they are private, loopback, or link-local.",
+        "Submitted URLs and raw telemetry fields remain in the prepared report and are not redacted before the Python bridge.",
+        "Python bridge imports an external llm-threat-intelligence directory and returns its threat-intelligence results and prompt.",
+        "Pipeline stage ordering and independent failure behavior are implemented when LLM_DIR is configured.",
+        "The external component is absent from this branch and the backend README states that it does not call an LLM or generate an explanation yet."
+      ],
+      "interfaces": [
+        "LLM_DIR enables the stage and points to the external component directory.",
+        "backend/scripts/llm_bridge.py receives JSON on stdin and returns JSON on stdout.",
+        "The stage receives signature, static-analysis, sandbox, and behavioral-ML reports when available."
+      ],
+      "dependencies": [
+        "Python 3 and an external llm-threat-intelligence component.",
+        "Any model/provider SDK and API credentials are not defined in this branch."
+      ],
+      "configuration": [
+        "LLM_DIR, LLM_BRIDGE_PATH, LLM_TIMEOUT_MS, and PYTHON_PATH.",
+        "Provider, model, prompt version, temperature, retry policy, and token/cost controls are not recorded."
+      ],
+      "tests": {
+        "inventory": [
+          "backend/test/llmStage.test.js covers indicator filtering, truncation, bridge failures, ordering, link input, and independent stage failure using fixtures/mocks."
+        ],
+        "observed": [
+          "Node tests did not start in the current WSL 1/npm environment. No real provider or MITRE mapping validation was run."
+        ],
+        "historical": []
+      },
+      "limitations": [
+        "No LLM provider, model, credentials, prompt artifact, explanation schema, or MITRE mapping implementation is available in this branch.",
+        "No hallucination, citation, redaction, cost, or mapping-accuracy evaluation is evidenced.",
+        "Input bounding reduces volume but is not a complete sensitive-data policy; submitted URLs and raw telemetry can still be forwarded without redaction."
+      ],
+      "risks": [
+        "Sending telemetry or indicators to an external service may disclose sensitive data.",
+        "Ungrounded explanations or ATT&CK mappings could mislead users without evidence citations and human review."
+      ],
+      "evidence": [
+        {
+          "path": "backend/src/adapters/llmInput.js",
+          "note": "Bounded report and indicator construction."
+        },
+        {
+          "path": "backend/scripts/llm_bridge.py",
+          "note": "External component bridge."
+        },
+        {
+          "path": "backend/test/llmStage.test.js",
+          "note": "Adapter and pipeline test inventory."
+        }
+      ]
+    }
+  },
+  "requirements": {
+    "FR01": {
+      "requirement": "Accept executable files through web upload or API.",
+      "responsible_components": [
+        "frontend",
+        "backend"
+      ],
+      "status": "Implemented",
+      "implementation_evidence": [
+        "website/dashboard/home.html",
+        "website/api.js",
+        "backend/src/routes/samples.js"
+      ],
+      "test_evidence": [
+        "backend/test/samples.test.js"
+      ],
+      "gap": "Backend test execution was not observed in the current environment; server-side PE or extension rejection is delegated to analysis rather than upload validation."
+    },
+    "FR02": {
+      "requirement": "Query file hashes against a known signature database.",
+      "responsible_components": [
+        "backend",
+        "malware_detection"
+      ],
+      "status": "Partial",
+      "implementation_evidence": [
+        "backend/src/signatures/catalog.js",
+        "backend/signatures/catalog.json",
+        "malware_detection/reputation.py",
+        "malware_detection/yara_scan.py"
+      ],
+      "test_evidence": [
+        "backend/test/catalog.test.js",
+        "malware_detection/tests/test_reputation.py",
+        "malware_detection/tests/test_yara.py"
+      ],
+      "gap": "The default backend catalog contains safe test indicators, no production feed is selected, and the analyzer's reputation/YARA evidence is only used when the real analyzer is configured."
+    },
+    "FR03": {
+      "requirement": "Compute a static ML malicious-probability score.",
+      "responsible_components": [
+        "machine_learning",
+        "malware_detection",
+        "backend"
+      ],
+      "status": "Planned/not present",
+      "implementation_evidence": [
+        "malware_detection/output_schema.json",
+        "ML/train_classifier.py",
+        "backend/src/pipeline/stages.js"
+      ],
+      "test_evidence": [
+        "malware_detection/tests/test_consumers.py"
+      ],
+      "gap": "No static-feature model, training dataset, model artifact, or static_ml pipeline stage exists; current ML features are behavioral."
+    },
+    "FR04": {
+      "requirement": "Detonate unknown binaries within an isolated sandbox.",
+      "responsible_components": [
+        "dynamic_analysis",
+        "backend"
+      ],
+      "status": "Stubbed/configurable",
+      "implementation_evidence": [
+        "backend/src/stages/sandboxClient.js",
+        "backend/src/pipeline/stages.js"
+      ],
+      "test_evidence": [
+        "backend/test/sandboxStages.test.js"
+      ],
+      "gap": "Only the backend client and mock tests are present; the VM, detonation API, reset lifecycle, and isolation validation are absent."
+    },
+    "FR05": {
+      "requirement": "Compute a behavioral ML risk score from recorded runtime activity.",
+      "responsible_components": [
+        "dynamic_analysis",
+        "machine_learning",
+        "backend"
+      ],
+      "status": "Stubbed/configurable",
+      "implementation_evidence": [
+        "ML/report_parser.py",
+        "ML/predict.py",
+        "backend/src/adapters/sandboxToMl.js",
+        "backend/src/pipeline/stages.js"
+      ],
+      "test_evidence": [
+        "ML/test_report_parser.py",
+        "backend/test/sandboxStages.test.js"
+      ],
+      "gap": "Behavioral scoring code is present, but end-to-end operation requires the absent sandbox and no trained model artifact is supplied."
+    },
+    "FR06": {
+      "requirement": "Generate an automated LLM report mapped to MITRE ATT&CK tactics.",
+      "responsible_components": [
+        "llm_threat_intelligence",
+        "backend"
+      ],
+      "status": "Stubbed/configurable",
+      "implementation_evidence": [
+        "backend/src/adapters/llmInput.js",
+        "backend/scripts/llm_bridge.py",
+        "backend/src/pipeline/stages.js"
+      ],
+      "test_evidence": [
+        "backend/test/llmStage.test.js"
+      ],
+      "gap": "The external component is absent and no LLM explanation or MITRE mapping is generated by code in this branch."
+    },
+    "FR07": {
+      "requirement": "Display scores, telemetry, and generated reports in a unified dashboard.",
+      "responsible_components": [
+        "frontend",
+        "backend"
+      ],
+      "status": "Partial",
+      "implementation_evidence": [
+        "website/dashboard/home.html",
+        "website/dashboard/reports.html",
+        "backend/src/routes/samples.js"
+      ],
+      "test_evidence": [
+        "backend/test/samples.test.js"
+      ],
+      "gap": "The home page shows stage progress, but report history is disconnected and no detailed telemetry/report view is implemented."
+    },
+    "FR08": {
+      "requirement": "Log historical scan results for benchmarking and validation.",
+      "responsible_components": [
+        "backend",
+        "machine_learning"
+      ],
+      "status": "Implemented",
+      "implementation_evidence": [
+        "backend/src/db.js",
+        "backend/src/store/sampleStore.js",
+        "backend/src/routes/samples.js"
+      ],
+      "test_evidence": [
+        "backend/test/samples.test.js"
+      ],
+      "gap": "Persistence and paged retrieval exist, but no export or benchmarking workflow consumes the history in this branch."
+    },
+    "NFR Safety": {
+      "requirement": "Isolate the sandbox network and host and restore a known state.",
+      "responsible_components": [
+        "dynamic_analysis"
+      ],
+      "status": "Planned/not present",
+      "implementation_evidence": [
+        "backend/src/stages/sandboxClient.js"
+      ],
+      "test_evidence": [
+        "backend/test/sandboxStages.test.js"
+      ],
+      "gap": "Client behavior is tested with mocks, but actual VM containment, networking, sample handling, and snapshot restoration are not present or verified."
+    },
+    "NFR Explainability": {
+      "requirement": "Report feature importance and connect explanations to observed evidence.",
+      "responsible_components": [
+        "machine_learning",
+        "malware_detection",
+        "llm_threat_intelligence"
+      ],
+      "status": "Partial",
+      "implementation_evidence": [
+        "ML/report_parser.py",
+        "malware_detection/REPORT_CONTRACT.md",
+        "backend/src/adapters/llmInput.js"
+      ],
+      "test_evidence": [
+        "ML/test_report_parser.py",
+        "malware_detection/tests/test_contract.py"
+      ],
+      "gap": "Evidence lists and static facts exist, but trained-model feature importance and LLM explanations with citations do not."
+    },
+    "NFR Usability": {
+      "requirement": "Make the dashboard understandable to non-expert analysts.",
+      "responsible_components": [
+        "frontend",
+        "llm_threat_intelligence"
+      ],
+      "status": "Partial",
+      "implementation_evidence": [
+        "website/dashboard/home.html",
+        "website/dashboard/reports.html"
+      ],
+      "test_evidence": [],
+      "gap": "The progress display has plain-language states, but report presentation, accessibility, and usability have not been completed or evaluated."
+    },
+    "NFR Performance": {
+      "requirement": "Return static results within an interactive demonstration timeframe.",
+      "responsible_components": [
+        "backend",
+        "malware_detection",
+        "machine_learning",
+        "frontend"
+      ],
+      "status": "Not verified",
+      "implementation_evidence": [
+        "backend/src/config.js",
+        "backend/src/queue/jobQueue.js"
+      ],
+      "test_evidence": [
+        "backend/test/jobQueue.test.js"
+      ],
+      "gap": "Timeouts and concurrency limits exist, but no latency target, load test, or current benchmark result is recorded."
+    },
+    "NFR Maintainability": {
+      "requirement": "Keep a modular Git-based architecture with explicit contracts.",
+      "responsible_components": [
+        "frontend",
+        "backend",
+        "malware_detection",
+        "machine_learning",
+        "dynamic_analysis",
+        "llm_threat_intelligence"
+      ],
+      "status": "Implemented",
+      "implementation_evidence": [
+        "backend/docs/api-contract.md",
+        "malware_detection/REPORT_CONTRACT.md",
+        "backend/src/pipeline/stages.js",
+        "docs/CONTRIBUTION_TRACKER.md"
+      ],
+      "test_evidence": [
+        "tests/contribution_tracker/test_tracker.py",
+        "tests/contribution_tracker/test_branches.py"
+      ],
+      "gap": "Cross-component contracts still disagree in places and the optional component source trees are not available on this branch."
+    }
+  },
+  "verification": [
+    {
+      "id": "DOC-VER-001",
+      "date": "2026-11-03",
+      "scope": "Contribution tracker",
+      "command": "python3 -m unittest discover -s tests/contribution_tracker -v",
+      "result": "30 tests ran and passed.",
+      "status": "observed-pass",
+      "evidence_paths": [
+        "tests/contribution_tracker/test_tracker.py",
+        "tests/contribution_tracker/test_branches.py"
+      ]
+    },
+    {
+      "id": "DOC-VER-002",
+      "date": "2026-11-03",
+      "scope": "Backend",
+      "command": "cd backend && npm test",
+      "result": "Tests did not start; the available npm shim reported WSL 1 is unsupported and could not determine the Node.js installation directory.",
+      "status": "blocked-environment",
+      "evidence_paths": [
+        "backend/package.json",
+        "backend/test/samples.test.js"
+      ]
+    },
+    {
+      "id": "DOC-VER-003",
+      "date": "2026-11-03",
+      "scope": "Malware detection",
+      "command": "python3 -m unittest discover -s malware_detection/tests -v",
+      "result": "Six test modules failed to import because pefile is not installed; no assertions ran.",
+      "status": "blocked-dependency",
+      "evidence_paths": [
+        "malware_detection/requirements-dev.txt",
+        "malware_detection/tests/test_analyze.py"
+      ]
+    },
+    {
+      "id": "DOC-VER-004",
+      "date": "2026-11-03",
+      "scope": "Machine learning",
+      "command": "cd ML && python3 -m unittest test_report_parser -v",
+      "result": "The test module failed to import because joblib is not installed; no assertions ran.",
+      "status": "blocked-dependency",
+      "evidence_paths": [
+        "requirements.txt",
+        "ML/test_report_parser.py"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "id": "RISK-001",
+      "type": "Safety",
+      "description": "No sandbox implementation or containment evidence is present in this branch.",
+      "impact": "Critical if real malware is executed under an assumed but unverified isolation boundary.",
+      "likelihood": "Medium if the prototype is demonstrated with real malware.",
+      "mitigation": "Use inert fixtures only until VM networking, host isolation, sample handling, and snapshot restoration are independently validated.",
+      "status": "Open",
+      "evidence_paths": [
+        "backend/src/stages/sandboxClient.js"
+      ]
+    },
+    {
+      "id": "RISK-002",
+      "type": "Integration",
+      "description": "Static ML is not wired and dynamic/LLM components are absent or optional.",
+      "impact": "The conceptual layered pipeline cannot run end to end from this branch.",
+      "likelihood": "Certain in the default configuration.",
+      "mitigation": "Present the default signature plus mock static-analysis path honestly and track each optional integration separately.",
+      "status": "Open",
+      "evidence_paths": [
+        "backend/src/pipeline/stages.js"
+      ]
+    },
+    {
+      "id": "RISK-003",
+      "type": "Data and model quality",
+      "description": "No dataset provenance, trained artifacts, or benchmark results are committed.",
+      "impact": "Accuracy, bias, leakage, family generalization, and licensing cannot be assessed.",
+      "likelihood": "Certain for this branch.",
+      "mitigation": "Create dataset and model cards before reporting classifier performance; retain exact split and reproduction commands.",
+      "status": "Open",
+      "evidence_paths": [
+        "ML/train_classifier.py",
+        "ML/evaluate.py"
+      ]
+    },
+    {
+      "id": "RISK-004",
+      "type": "Security and privacy",
+      "description": "Uploads, telemetry, URLs, hashes, and account records may contain sensitive data.",
+      "impact": "Local persistence or external enrichment could disclose information.",
+      "likelihood": "Medium when used beyond inert demonstrations.",
+      "mitigation": "Define retention, deletion, access, redaction, and external-data policies before deployment; do not commit secrets or samples.",
+      "status": "Open",
+      "evidence_paths": [
+        "backend/src/config.js",
+        "backend/src/db.js",
+        "backend/src/adapters/llmInput.js"
+      ]
+    },
+    {
+      "id": "RISK-005",
+      "type": "Verification",
+      "description": "Several suites could not run in the documentation environment.",
+      "impact": "Current branch behavior is less certain than historical records imply.",
+      "likelihood": "Current",
+      "mitigation": "Run Node tests under supported Node/WSL and install documented Python dependencies in an isolated environment before release claims.",
+      "status": "Open",
+      "evidence_paths": [
+        "backend/package.json",
+        "malware_detection/requirements-dev.txt",
+        "requirements.txt"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "docs/project-overview.md",
+      "purpose": "Project baseline, requirements, scope, schedule, and team responsibilities.",
+      "owner": "Documentation coordinator / integration lead",
+      "status": "Current baseline; current-version reconciliation required"
+    },
+    {
+      "path": "backend/README.md",
+      "purpose": "Backend setup, behavior, integration status, tests, and next steps.",
+      "owner": "Backend team",
+      "status": "Detailed component documentation"
+    },
+    {
+      "path": "backend/docs/api-contract.md",
+      "purpose": "Dashboard-facing REST API contract.",
+      "owner": "Backend and frontend teams",
+      "status": "Authoritative narrow contract"
+    },
+    {
+      "path": "backend/docs/azure-database.md",
+      "purpose": "Optional PostgreSQL database setup and operational notes.",
+      "owner": "Backend team",
+      "status": "Component documentation"
+    },
+    {
+      "path": "malware_detection/README.md",
+      "purpose": "Static analyzer usage, safety, evidence, and tests.",
+      "owner": "Malware-detection team",
+      "status": "Detailed component documentation"
+    },
+    {
+      "path": "malware_detection/REPORT_CONTRACT.md",
+      "purpose": "Static analyzer JSON report contract.",
+      "owner": "Malware-detection team",
+      "status": "Authoritative narrow contract"
+    },
+    {
+      "path": "malware_detection/INTEGRATION.md",
+      "purpose": "Analyzer CLI integration instructions.",
+      "owner": "Malware-detection and backend teams",
+      "status": "Component handoff"
+    },
+    {
+      "path": "docs/CONTRIBUTION_TRACKER.md",
+      "purpose": "Issue-tracking automation documentation; separate from product LLM functionality.",
+      "owner": "Project documentation",
+      "status": "Verified by 30 observed tests"
+    }
+  ]
+}

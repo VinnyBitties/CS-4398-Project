@@ -3,6 +3,7 @@ import json
 import threading
 import unittest
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 from pathlib import Path
 from report_parser import extract_features, analyze_report
 from predict import create_server, predict_report
@@ -22,12 +23,95 @@ class SandboxTests(unittest.TestCase):
             'has_network_signature': 1})
         self.assertEqual(analyze_report(self.report).features, extract_features(self.report))
 
-    def test_valid_zero_activity(self):
+    def test_zero_activity_is_inconclusive(self):
         for key in self.report['summary']:
             self.report['summary'][key] = 0
         for key in ('processes','network','dns','file_drops','registry','remote_threads'):
             self.report[key] = []
-        self.assertTrue(all(v == 0 for v in extract_features(self.report).values()))
+        for operation in (extract_features, analyze_report, predict_report):
+            with self.assertRaisesRegex(ValueError, "NO_TELEMETRY"):
+                operation(self.report)
+
+    def test_collection_errors_override_nonzero_counts(self):
+        for failure in ({'parse_error': 'missing log'},
+                        {'telemetry': {'parse_error': 'bad log'}},
+                        {'error': 'execution failed'},
+                        {'execution_succeeded': False},
+                        {'telemetry_collected': False}):
+            with self.subTest(failure=failure):
+                with self.assertRaisesRegex(ValueError, 'TELEMETRY_ERROR'):
+                    predict_report({**self.report, **failure})
+
+    def test_legacy_dns_counts_match_sandbox(self):
+        legacy = {
+            'behavior': {'summary': {'processes_created': 3,
+                         'num_files_written': 4, 'num_registry_keys_set': 12}},
+            'network': {'tcp': [{}], 'dns': [{}, {}]},
+            'signatures': [],
+        }
+        self.assertEqual(extract_features(legacy), extract_features(self.report))
+        legacy['network']['tcp'] = []
+        self.assertEqual(extract_features(legacy)['num_network_connections'], 0)
+        self.assertEqual(extract_features(legacy)['num_dns_requests'], 2)
+        legacy['behavior']['summary'] = {}
+        legacy['network'] = {}
+        with self.assertRaisesRegex(ValueError, 'NO_TELEMETRY'):
+            extract_features(legacy)
+
+    def test_real_registry_field_and_similarly_named_keys(self):
+        for key, expected in (('Run', 1), ('RunOnce', 1), ('RunHistory', 0)):
+            with self.subTest(key=key):
+                target = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\' + key + '\\Updater'
+                self.report['registry'] = [{'target_object': target}]
+                analysis = analyze_report(self.report)
+                self.assertEqual(analysis.features['has_persistence_signature'], expected)
+                if expected:
+                    self.assertTrue(any(target in item for item in analysis.evidence))
+
+    def test_task_operations(self):
+        commands = {
+            'schtasks.exe /Query /FO LIST': 0,
+            'schtasks /Delete /TN updater': 0,
+            'schtasks /Run /TN updater': 0,
+            'not-schtasks.exe /Create /TN updater': 0,
+            'powershell Get-ScheduledTask': 0,
+            'powershell New-ScheduledTask': 0,
+            'powershell Unregister-ScheduledTask updater': 0,
+            'powershell Register-ScheduledTask updater': 1,
+            'powershell Set-ScheduledTask updater': 1,
+            '"C:\\Windows\\System32\\schtasks.exe" /CREATE /TN updater': 1,
+            'schtasks.exe /Change /TN updater /ENABLE': 1,
+        }
+        for command, expected in commands.items():
+            with self.subTest(command=command):
+                self.report['processes'] = [{'command_line': command}]
+                self.assertEqual(extract_features(self.report)['has_persistence_signature'], expected)
+
+    def test_http_rejects_empty_telemetry_without_verdict(self):
+        for key in self.report['summary']:
+            self.report['summary'][key] = 0
+        for key in ('processes', 'network', 'dns', 'file_drops', 'registry', 'remote_threads'):
+            self.report[key] = []
+        server = create_server('127.0.0.1', 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            request = Request(
+                f'http://127.0.0.1:{server.server_port}/analyze',
+                data=json.dumps(self.report).encode(),
+                headers={'Content-Type': 'application/json'}, method='POST')
+            with self.assertRaises(HTTPError) as caught:
+                urlopen(request, timeout=5)
+            with caught.exception as response:
+                self.assertEqual(response.code, 400)
+                result = json.loads(response.read())
+            self.assertIn('NO_TELEMETRY', result['error'])
+            self.assertNotIn('malicious', result)
+            self.assertNotIn('risk_score', result)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
 
     def test_missing_counts(self):
         for key in self.report['summary']:

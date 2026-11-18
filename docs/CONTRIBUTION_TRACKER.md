@@ -50,6 +50,8 @@ To deliberately ignore the previous checkpoint and reassess from the common ance
 
 API failures do not publish a result or advance its checkpoint. Dry runs also never
 advance checkpoints. The --apply option remains restricted to default-branch Actions.
+Dry-run output lists completion candidates, but no issue closes unless both --apply and
+automatic_closures are enabled.
 
 ## What is compared
 
@@ -85,6 +87,9 @@ are available regardless of that setting. Initialization is still a separate man
 3. Run review, Branch ML-Axel, Apply unchecked to preview a real branch report.
 4. Run review with Apply checked to publish the report and save its checkpoint.
 5. When ready, set automatic_reviews: true in .github/issue-plan.json on main.
+6. Leave automatic_closures false while reviewing completion assessments. When ready
+   for evidence-based autonomous closure, set it to true on main and run each existing
+   branch once with Force checked so the current comparison contains its full evidence.
 
 Immediate push route:
 - Put ONLY .github/workflows/component-branch-changed.yml on each component branch
@@ -114,8 +119,10 @@ Manual inputs: mode (seed/review), branch (blank reviews all), force, apply.
 Use main in GitHub's workflow branch selector when applying writes. Before the workflow
 exists on main, test locally as above; the newly added Run workflow button may not appear.
 Validation still runs on pushes to CI/CD and PRs into main without keys or issue writes.
-An explicit local --repo is optional for this project. GEMINI_MODEL can select another
-available model; default gemini-2.5-flash. Retain your existing repository API-key secret.
+An explicit local --repo is optional for this project. The Actions repository variable
+GEMINI_MODEL can select another available model without a code change; the fallback is
+gemini-3.8-flash. Gemini uses low thinking for this latency-sensitive classification and
+has a 180-second response timeout. Retain your existing repository API-key secret.
 
 ## Current issue behavior
 
@@ -127,8 +134,14 @@ available model; default gemini-2.5-flash. Retain your existing repository API-k
   Vinny/Joaquin. No account assignments are inferred.
 - Unmapped areas can still have seeded issues; add their branch names once confirmed.
 - Subsequent seed runs repair missing links but preserve existing issue text and state.
-- Status assessments are suggestions in the branch report, not automatic closures.
-- This version never assigns, closes, reopens, deletes, or relabels issues automatically.
+- Assessments are no_evidence, in_progress, review_needed, or complete. Complete requires
+  concrete code or documentation evidence and at least one path in the current comparison.
+- With automatic_closures false, completion candidates are reported but not changed.
+- With automatic_closures true and Apply checked, the tracker posts an evidence comment
+  on each eligible open subissue and closes it with the completed reason. Merge containment
+  and passing CI are not required; the branch evidence is the completion basis.
+- Only mapped tracker subissues can close automatically. Parent and unrelated issues never
+  close automatically, and the tracker never assigns, reopens, deletes, or relabels issues.
 - Old PR-based summary comments remain historical; new branch comments are separate.
 
 ## Evidence and limits
@@ -137,6 +150,13 @@ Only changed-file patches and previous reports are supplied, not full source sna
 A missing change is not proof that a feature is missing. CI summaries are tied to the
 head SHA and do not include test logs or certify all acceptance criteria. Previous AI
 claims are historical context, not independently verified evidence.
+
+Automatic completion is deliberately stricter than progress reporting: inherited report
+paths alone cannot support complete. At least one cited path must be present in the current
+comparison, which is why the first closure-enabled assessment of an existing branch should
+use Force. The tracker rechecks the branch head and the child's stable task marker before
+writing. Completion comments are reused, closure is idempotent, and closed issues are not
+automatically reopened.
 
 Maximum about 80,000 patch characters and 150,000 total context characters. Binary,
 large, and excluded patches are counted as omitted; GitHub may truncate patches too.
@@ -155,8 +175,9 @@ Hourly Actions jobs still consume private-repository minutes even when Gemini is
 
 ## Verification
 
-20 local mocked tests pass: initialization idempotency, dry-run non-mutation, native
-subissue links, report validation, first branch review, incremental comparison, comment
-reuse, force refresh, rewritten history, stale SHA rejection, quota checkpoint protection,
-comparison cap, and branch marker isolation. Workflow YAML is parsed locally.
-Live Gemini/GitHub execution and Actions events still need verification in your repo.
+Local mocked tests cover initialization idempotency, dry-run non-mutation, native subissue
+links, report and plan validation, current-evidence completion, closure rollout controls,
+completion comments and idempotency, oversized-report protection, first branch review,
+incremental comparison, comment reuse, force refresh, rewritten history, stale SHA
+rejection, quota checkpoint protection, comparison caps, and branch marker isolation.
+Live autonomous closure and automatic Actions events still need verification in your repo.

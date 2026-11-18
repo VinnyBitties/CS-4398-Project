@@ -51,6 +51,7 @@ const scans = {
 	},
 	submitLink: (url) => api("/links", { method: "POST", body: { url } }),
 	get: (id) => api("/samples/" + encodeURIComponent(id)),
+	list: (limit = 20, offset = 0) => api("/samples?limit=" + encodeURIComponent(limit) + "&offset=" + encodeURIComponent(offset)),
 };
 
 function errorMessage(res, fallback) {

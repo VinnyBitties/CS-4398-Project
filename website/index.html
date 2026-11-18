@@ -6,43 +6,51 @@
 	<title>Coin Flip Defense</title>
 	<link rel="icon" type="image/svg+xml" href="head.svg">
 	<link rel="stylesheet" href="style.css">
+	<link rel="stylesheet" href="retro.css">
+	<link rel="stylesheet" href="retro-pages.css">
+	<script src="retro-loading.js" defer></script>
 </head>
-<body>
-	<div class="sign-in">
-		<h1 class="name">CoinFlip Defense</h1>
+<body class="login-page">
+	<main class="login-main" tabindex="-1">
+	<header class="page-heading" data-retro-render><div><p class="eyebrow">:: WELCOME TO OUR CYBER HEADQUARTERS ::</p><h1 class="name">Coin Flip Defense</h1><p class="muted">File scanning on the World Wide Web.</p></div></header>
+	<div class="welcome-strip" data-retro-render>★ MEMBERS &amp; VISITORS WELCOME ★</div>
+	<div class="sign-in retro-panel" data-retro-render>
+		<h2 class="window-title">Member sign-in</h2>
 		<div id="loginstatus"></div>
 		<div class="infobox">
 			<div class="form-row">
-				<div for="username">Username</div>
+				<label for="username">Username</label>
 				<input type="text" id="username" class="form-input" name="username" placeholder="Enter username" autocomplete="off" required>
 			</div>
 			<div class="form-row">
-				<div for="password">Password</div>
+				<label for="password">Password</label>
 				<input type="password" id="password" class="form-input" name="password" placeholder="Enter password" required>
 			</div>
 		</div>
 		<button onclick="submitInfo()" class="submit">Log In</button>
 		<div class="non-sign-in">
 			<a href="" id="accountCreator">Create account</a>
-			<a href="dashboard/home.html?login=0">No Sign In</a>
+			<a href="dashboard/home.html?login=0">Continue as guest</a>
 		</div>
 	</div>
+	<footer class="retro-footer" data-retro-render><p>Thanks for visiting Coin Flip Defense!</p><small>100% HTML POWERED · NO FRILLS, ALL SCANS</small></footer>
+	</main>
 	
 	<div id="popup" class="popup-overlay">
-		<div class="popup-content">
-			<h2 class="popup-title">Create Account</h2>
+		<div class="popup-content" role="dialog" aria-modal="true" aria-labelledby="signup-title">
+			<h2 id="signup-title" class="popup-title window-title">Create Account</h2>
 			<form id="signupForm">
 				<div id="signupstatus"></div>
 				<div class="popup-input">
-					<div>Username:</div>
+					<label for="newUsername">Username:</label>
 					<input type="text" id="newUsername" autocomplete="username" required>
 				</div>
 				<div class="popup-input">
-					<div>Password:</div>
+					<label for="newPassword">Password:</label>
 					<input type="password" id="newPassword" autocomplete="new-password" minlength="8" required>
 				</div>
 				<div class="popup-input">
-					<div>Confirm Password:</div>
+					<label for="confirmPassword">Confirm Password:</label>
 					<input type="password" id="confirmPassword" autocomplete="new-password" required>
 				</div>
 				<div class="popup-buttons">
@@ -95,10 +103,14 @@
 		e.preventDefault();
 		signupStatus.textContent = "";
 		document.getElementById("popup").style.display = "grid";
+		window.RetroLoading?.revealInChunks("signup", [document.querySelector(".popup-content")]);
+		document.getElementById("newUsername").focus({ preventScroll: true });
 	});
 
 	function closePopup() {
+		window.RetroLoading?.finishReveal("signup");
 		document.getElementById("popup").style.display = "none";
+		document.getElementById("accountCreator").focus({ preventScroll: true });
 	}
 
 	// Create account: registering also signs the new user in.

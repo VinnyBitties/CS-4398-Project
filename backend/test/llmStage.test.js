@@ -48,6 +48,17 @@ const standInDir = makeLlmDir(
     "def build_security_prompt(report):\n" +
     "    return '\\nFilename: ' + str(report.get('filename')) + '\\nDynamic: ' + str(report.get('dynamic_analysis')) + '\\n'\n"
 );
+// Same as the stand-in, plus the explanation function Jaden's component has.
+const explainingDir = makeLlmDir(
+  "explaining",
+  "from threat_intel import analyze_indicator\n" +
+    "def build_security_prompt(report):\n" +
+    "    return 'Filename: ' + str(report.get('filename'))\n" +
+    "def generate_llm_explanation(report):\n" +
+    "    if report.get('filename') == 'boom.exe':\n" +
+    "        raise RuntimeError('rate limited')\n" +
+    "    return 'Explained ' + str(report.get('filename'))\n"
+);
 const brokenDir = makeLlmDir(
   "broken",
   "def build_security_prompt(report):\n    raise ValueError('cannot read this report')\n"
@@ -140,6 +151,51 @@ test("bridge: returns threat intel per indicator and the prompt", async () => {
   assert.equal(out.explanation_status, "not_generated");
 });
 
+// The child process inherits process.env, so set or clear the key around the call.
+async function withGroqKey(value, fn) {
+  const saved = process.env.GROQ_API_KEY;
+  if (value === undefined) delete process.env.GROQ_API_KEY;
+  else process.env.GROQ_API_KEY = value;
+  try {
+    return await fn();
+  } finally {
+    if (saved === undefined) delete process.env.GROQ_API_KEY;
+    else process.env.GROQ_API_KEY = saved;
+  }
+}
+
+function runExplaining(filename) {
+  return runPythonJson({
+    pythonPath: python,
+    scriptPath: bridgePath,
+    args: [explainingDir],
+    input: { report: { filename }, indicators: [] },
+  });
+}
+
+test("bridge: with GROQ_API_KEY set, the explanation is returned", async () => {
+  const out = await withGroqKey("test-key", () => runExplaining("a.exe"));
+  assert.equal(out.explanation, "Explained a.exe");
+  assert.equal(out.explanation_status, "generated");
+  assert.match(out.prompt, /a\.exe/);
+});
+
+test("bridge: without GROQ_API_KEY the explanation is skipped, not a failure", async () => {
+  const out = await withGroqKey(undefined, () => runExplaining("a.exe"));
+  assert.equal(out.explanation, null);
+  assert.equal(out.explanation_status, "skipped");
+  assert.match(out.explanation_error, /GROQ_API_KEY/);
+  assert.match(out.prompt, /a\.exe/);
+});
+
+test("bridge: an LLM call that raises is recorded, and the rest is still returned", async () => {
+  const out = await withGroqKey("test-key", () => runExplaining("boom.exe"));
+  assert.equal(out.explanation, null);
+  assert.equal(out.explanation_status, "error");
+  assert.match(out.explanation_error, /RuntimeError: rate limited/);
+  assert.match(out.prompt, /boom\.exe/);
+});
+
 test("bridge: a missing component folder is a clear error", async () => {
   await assert.rejects(
     runPythonJson({ pythonPath: python, scriptPath: bridgePath, args: [path.join(tmp, "nope")], input: {} }),
@@ -228,16 +284,19 @@ test(
       { submission_type: "file", sha256: "ab".repeat(32), original_filename: "a.exe" },
       { static_analysis: { schema_version: "1.2.0" }, sandbox: sandboxReport(), behavioral_ml: { risk_level: "high" } }
     );
-    const out = await runPythonJson({
-      pythonPath: python,
-      scriptPath: bridgePath,
-      args: [realLlmDir],
-      input: { report, indicators },
-    });
+    // No key, so this never calls Groq from the test suite.
+    const out = await withGroqKey(undefined, () =>
+      runPythonJson({ pythonPath: python, scriptPath: bridgePath, args: [realLlmDir], input: { report, indicators } })
+    );
     assert.equal(out.threat_intel.length, indicators.length);
-    assert.ok(out.threat_intel.every((t) => t.status === "received"));
+    // threat_intel.py now validates each indicator against its demo list.
+    assert.deepEqual(out.threat_intel.map((t) => t.indicator), indicators.map((i) => i.indicator));
+    for (const t of out.threat_intel) {
+      assert.ok(["suspicious", "not_found", "invalid", "unsupported"].includes(t.status), t.status);
+    }
     assert.match(out.prompt, /a\.exe/);
     assert.match(out.prompt, /c2\.example\.com/);
     assert.match(out.prompt, /risk_level/);
+    assert.equal(out.explanation_status, "skipped");
   }
 );

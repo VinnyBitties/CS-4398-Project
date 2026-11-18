@@ -1,5 +1,8 @@
 # Defines shared ML feature names, thresholds, dataset paths, and label constants.
 
+# Increment when feature order or extraction semantics change.
+FEATURE_SCHEMA_VERSION = "sysmon-behavior-v1"
+
 FEATURE_COLUMNS = [
     "num_processes_created",
     "num_files_written",
