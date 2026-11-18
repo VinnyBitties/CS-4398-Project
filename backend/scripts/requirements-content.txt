@@ -1,0 +1,6 @@
+# Optional extras for scripts/content_analyze.py. The analyzer works with
+# the Python standard library alone; each of these adds one capability.
+oletools>=0.60      # decompress and scan Office VBA macro source
+py7zr>=0.20         # list .7z archive contents
+rarfile>=4.1        # list .rar archive contents (needs `unrar` or `bsdtar`)
+pycdlib>=1.14       # list .iso disk image contents

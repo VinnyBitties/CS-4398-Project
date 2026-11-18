@@ -55,7 +55,9 @@ Each `results[]` entry:
 | `stage` | Runs for | Status | `report` shape |
 |---|---|---|---|
 | `signature` | files, links | **Live** | `{ matched, checked: "sha256"\|"url", match: { type, name, severity, source } \| null }` |
-| `static_analysis` | files | **Live** (mock analyzer by default, real one by configuration) | The static analyzer's report, `schema_version` `1.2.0`, defined field by field in `malware_detection/REPORT_CONTRACT.md`. With the default mock, the PE fields are canned values. This is extracted evidence, not a verdict. |
+| `file_type` | files | **Live** (off if `CONTENT_ANALYZER_PATH` is empty) | What the file really is, from its bytes, not its name: `{ category, format, description, extension, extension_mismatch, expected_extensions[], is_text, size, truncated, warnings[], risk_level, filename, analyzer_version }`. `category` is `executable`, `installer`, `office`, `pdf`, `script`, `source`, `archive`, `shortcut`, `web` or `unknown`; `format` is e.g. `pe`, `elf`, `docx`, `pptx`, `xls`, `pdf`, `powershell`, `cpp`, `zip`. `warnings[]` (same shape as findings below) flags name tricks: `extension_mismatch` (an .exe named .pdf), `double_extension`, `rtlo_filename`. Routes the later stages: PEs (and `unknown` files) go to `static_analysis`, everything else to `content_analysis`. |
+| `static_analysis` | files | **Live** (mock analyzer by default, real one by configuration) | The static analyzer's report, `schema_version` `1.2.0`, defined field by field in `malware_detection/REPORT_CONTRACT.md`. With the default mock, the PE fields are canned values. This is extracted evidence, not a verdict. Skipped (no `results[]` entry) when `file_type` identified the file as something other than a PE. |
+| `content_analysis` | files that are not PEs | **Live** (off if `CONTENT_ANALYZER_PATH` is empty) | `{ analyzer_version, filename, category, format, risk_level: "none"\|"low"\|"medium"\|"high", findings[], indicators: { urls[], domains[], ips[] }, details, tools: { oletools } }`. Each finding is `{ id, severity: "low"\|"medium"\|"high", description, evidence? }`, worst first. Office: macros, auto-run macros, remote templates, external OLE objects, DDE, ActiveX, embedded objects. PDF: auto-run JavaScript, `/Launch`, embedded files, `#`-escaped keywords (looks inside compressed streams). Scripts: download-and-run, encoded/obfuscated commands, Defender tampering, persistence. Source code (`.c/.cpp/.h/.cs/.go/.rs/.java`): process injection, embedded shellcode, keylogging, anti-debugging (static only, never compiled). Archives (ZIP, tar, gzip): every file inside is analyzed (up to 3 levels deep), plus zip-bomb, password, path-traversal and double-extension checks; `details.members[]` holds each member's result. Also `.lnk`/`.url` shortcuts, HTML/SVG/HTA, OneNote, RTF, CSV. `risk_level` is the worst finding's severity: evidence, not a verdict. |
 | `static_ml` | files | Planned | To be defined with ML. |
 | `sandbox` | files | **Live when `SANDBOX_URL` is set** | The sandbox's `/detonate` response as-is: `{ job_id, filename, timeout_seconds, summary: { process_count, network_count, dns_count, file_drops_count, registry_count }, telemetry: { processes[], network[], dns[], file_drops[], registry[] } }`. Links are not detonated yet. |
 | `behavioral_ml` | files | **Live when `SANDBOX_URL` is set** | The ML service's verdict, `{ malicious, risk_score, risk_level, features, evidence[] }`, plus `input_summary` (the counts that were scored) and `adapter_notes[]` (values the backend had to fill in). |
@@ -214,6 +216,9 @@ all from `static_analysis`: `NONZERO_EXIT` (most often: not a valid PE file;
 `TIMEOUT`, `BAD_STATUS`, `BAD_JSON`; `TELEMETRY_PARSE_ERROR` (the sandbox ran
 but could not read its Sysmon log, so nothing is scored); `BAD_SANDBOX_REPORT`;
 and, on `behavioral_ml` only, `NO_SANDBOX_REPORT` (the sandbox stage failed).
+From `file_type` and `content_analysis`: `LAUNCH_FAILED` (Python or the
+script not found), `TIMEOUT`, `NONZERO_EXIT`, `BAD_JSON`. If `file_type` fails,
+`static_analysis` runs for the file as it did before file types existed.
 
 ## Open questions
 

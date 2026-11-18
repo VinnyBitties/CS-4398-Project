@@ -38,6 +38,17 @@ const config = {
   workerId: process.env.WORKER_ID || `${os.hostname()}:${process.env.PORT || "3000"}`,
   maxUploadBytes: parseInt(process.env.MAX_UPLOAD_BYTES || "26214400", 10), // 25 MiB
   analyzerTimeoutMs: parseInt(process.env.ANALYZER_TIMEOUT_MS || "15000", 10),
+
+  // File type detection and per-type analysis (scripts/content_analyze.py):
+  // the `file_type` and `content_analysis` stages. Gives Office, PDF, script,
+  // source-code, archive, shortcut and web uploads their own analysis instead
+  // of failing the PE analyzer. Runs with PYTHON_PATH; standard library only.
+  // Set CONTENT_ANALYZER_PATH to an empty value to turn both stages off.
+  contentAnalyzerPath:
+    process.env.CONTENT_ANALYZER_PATH === ""
+      ? ""
+      : resolveFromRoot(process.env.CONTENT_ANALYZER_PATH || "./scripts/content_analyze.py"),
+  contentAnalyzerTimeoutMs: parseInt(process.env.CONTENT_ANALYZER_TIMEOUT_MS || "30000", 10),
   // Analyzer report contract versions (malware_detection/REPORT_CONTRACT.md)
   // this backend accepts. The backend stores the report and passes it to the
   // dashboard without reading inside it, so the additive 1.1.0 and 1.2.0
