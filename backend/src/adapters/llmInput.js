@@ -7,6 +7,7 @@
  *
  * `report` matches what llm_analyzer.build_security_prompt() reads:
  *   filename, sha256, static_analysis, ml_analysis, dynamic_analysis
+ * (static_analysis is the content_analysis report for non-PE uploads),
  * plus a few fields it ignores today but may use later (submission_type,
  * url, signature). A stage that didn't run or failed contributes {}.
  *
@@ -97,6 +98,15 @@ function collectIndicators(sample, reports) {
   for (const event of Array.isArray(telemetry.network) ? telemetry.network : []) {
     if (event && isPublicIp(event.dest_ip)) add(event.dest_ip, "ip");
   }
+
+  // URLs, domains and IPs found inside a document, script, archive etc.
+  // After the sandbox's, which are what the sample actually contacted.
+  const found = (reports.content_analysis && reports.content_analysis.indicators) || {};
+  for (const url of Array.isArray(found.urls) ? found.urls : []) add(url, "url");
+  for (const domain of Array.isArray(found.domains) ? found.domains : []) add(domain, "domain");
+  for (const ip of Array.isArray(found.ips) ? found.ips : []) {
+    if (isPublicIp(ip)) add(ip, "ip");
+  }
   return indicators;
 }
 
@@ -115,7 +125,11 @@ function buildLlmInput(sample, reports = {}) {
       sha256: sample.submission_type === "file" ? sample.sha256 : null,
       url: sample.submitted_url || null,
       signature: reports.signature || {},
-      static_analysis: reports.static_analysis || {},
+      file_type: reports.file_type || {},
+      // llm_analyzer reads static_analysis; for a non-PE upload the
+      // content_analysis findings are its static analysis.
+      static_analysis: reports.static_analysis || reports.content_analysis || {},
+      content_analysis: reports.content_analysis || {},
       ml_analysis: ml,
       dynamic_analysis: dynamic,
     },

@@ -23,6 +23,9 @@ async function runPipeline(sampleId, stages = defaultStages) {
   const ctx = { reports: {} };
   for (const stage of stages) {
     if (!stage.appliesTo.includes(sample.submission_type)) continue;
+    // Optional finer filter, e.g. on the file type an earlier stage detected.
+    // A stage that doesn't apply gets no results row, same as above.
+    if (typeof stage.shouldRun === "function" && !stage.shouldRun(sample, ctx)) continue;
 
     const resultId = await store.startResult(sample.id, stage.name);
     let outcome;

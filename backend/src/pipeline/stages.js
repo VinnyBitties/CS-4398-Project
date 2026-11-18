@@ -47,11 +47,66 @@ const signatureStage = {
   },
 };
 
+// Formats the PE analyzer (malware_detection/analyze.py) understands.
+const PE_FORMATS = new Set(["pe", "dos", "dos_com"]);
+
+// Identifies what an upload really is from its bytes (scripts/content_analyze.py
+// detect): { category, format, description, extension, extension_mismatch,
+// warnings[], risk_level, ... }. Runs first so later stages can route on it.
+function createFileTypeStage({ pythonPath, scriptPath, timeoutMs, runFn = runPythonJson }) {
+  return {
+    name: "file_type",
+    appliesTo: ["file"],
+    async run(sample) {
+      const report = await runFn({
+        pythonPath,
+        scriptPath,
+        args: ["detect"],
+        input: { path: sample.stored_path, filename: sample.original_filename || null },
+        timeoutMs,
+      });
+      return { report };
+    },
+  };
+}
+
+// Static analysis for everything that is not a PE: Office macros and remote
+// templates, PDF JavaScript, suspicious script/source patterns, archive
+// contents (recursively), shortcuts, web pages (scripts/content_analyze.py
+// analyze). Evidence with a severity per finding, not a verdict.
+function createContentAnalysisStage({ pythonPath, scriptPath, timeoutMs, runFn = runPythonJson }) {
+  return {
+    name: "content_analysis",
+    appliesTo: ["file"],
+    shouldRun(sample, ctx) {
+      const fileType = ctx.reports.file_type;
+      return Boolean(fileType) && !PE_FORMATS.has(fileType.format);
+    },
+    async run(sample) {
+      const report = await runFn({
+        pythonPath,
+        scriptPath,
+        args: ["analyze"],
+        input: { path: sample.stored_path, filename: sample.original_filename || null },
+        timeoutMs,
+      });
+      return { report };
+    },
+  };
+}
+
 // The static analyzer (malware_detection/analyze.py, or the mock) extracts PE
 // features. It is the input the static ML stage will score, not a verdict.
+// It runs for PEs, and for files nobody recognized (as before file types were
+// detected); a PDF, script, archive etc. goes to content_analysis instead. If
+// the file_type stage is off or failed, it runs for every file, as it used to.
 const staticAnalysisStage = {
   name: "static_analysis",
   appliesTo: ["file"],
+  shouldRun(sample, ctx) {
+    const fileType = ctx.reports.file_type;
+    return !fileType || PE_FORMATS.has(fileType.format) || fileType.category === "unknown";
+  },
   async run(sample) {
     return { report: await runAnalyzer(sample.stored_path) };
   },
@@ -122,7 +177,18 @@ function createLlmStage({ pythonPath, bridgePath, llmDir, timeoutMs, runFn = run
 }
 
 // Still to come: static_ml (FR03) after static_analysis.
-const stages = [signatureStage, staticAnalysisStage];
+const stages = [signatureStage];
+
+// File type detection and content analysis are on unless
+// CONTENT_ANALYZER_PATH is set to an empty value.
+const contentOptions = config.contentAnalyzerPath && {
+  pythonPath: config.pythonPath,
+  scriptPath: config.contentAnalyzerPath,
+  timeoutMs: config.contentAnalyzerTimeoutMs,
+};
+if (contentOptions) stages.push(createFileTypeStage(contentOptions));
+stages.push(staticAnalysisStage);
+if (contentOptions) stages.push(createContentAnalysisStage(contentOptions));
 
 // The sandbox and behavioral ML stages are off unless SANDBOX_URL is set, so
 // the backend still runs (and its tests still pass) without the sandbox VM.
@@ -153,6 +219,9 @@ module.exports = {
   stages,
   signatureStage,
   staticAnalysisStage,
+  createFileTypeStage,
+  createContentAnalysisStage,
+  PE_FORMATS,
   createSandboxStage,
   createBehavioralMlStage,
   createLlmStage,
