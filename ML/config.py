@@ -15,6 +15,33 @@ FEATURE_COLUMNS = [
     "has_network_signature",
 ]
 
+# Independent schema for backend file_type/content_analysis reports. Keep this
+# separate from behavioral features: the two report sources have different
+# meaning and may be present for different files.
+STATIC_FEATURE_SCHEMA_VERSION = "content-analysis-static-v1"
+STATIC_CATEGORY_VALUES = [
+    "executable", "installer", "office", "pdf", "script", "source",
+    "archive", "shortcut", "web", "unknown",
+]
+STATIC_FORMAT_VALUES = [
+    "pe", "dos", "elf", "macho", "java_class", "jar", "apk", "msi",
+    "doc", "xls", "ppt", "ole", "docx", "xlsx", "pptx", "rtf", "onenote",
+    "csv", "pdf", "powershell", "batch", "vbscript", "jscript", "wsf",
+    "hta", "python", "shell", "c", "cpp", "c_header", "csharp", "go",
+    "rust", "java", "zip", "rar", "7z", "gzip", "tar", "cab", "iso",
+    "vhd", "img", "lnk", "internet_shortcut", "html", "svg", "chm", "text",
+    "unknown",
+]
+STATIC_FINDING_BUCKETS = 32
+STATIC_FEATURE_COLUMNS = [
+    *(f"category_{value}" for value in STATIC_CATEGORY_VALUES),
+    *(f"format_{value}" for value in STATIC_FORMAT_VALUES),
+    "content_risk_none", "content_risk_low", "content_risk_medium", "content_risk_high",
+    "extension_mismatch", "file_truncated", "finding_count",
+    "finding_severity_low", "finding_severity_medium", "finding_severity_high",
+    *(f"finding_id_bucket_{index:02d}" for index in range(STATIC_FINDING_BUCKETS)),
+]
+
 DEFAULT_MALICIOUS_THRESHOLD = 0.5
 
 PERSISTENCE_KEYWORDS = [

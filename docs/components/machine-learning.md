@@ -42,6 +42,12 @@ The ordered features are:
 
 Persistence evidence includes signature keywords and raw behaviors such as Run/RunOnce registry paths or suspicious scheduled-task commands. Network evidence includes signature keywords or observed connection/DNS counts.
 
+### Static content-analysis features
+
+The independent `content-analysis-static-v1` schema in `ML/static_features.py` consumes the backend's `file_type` and `content_analysis` stage reports. It one-hot encodes the documented category and format, records analyzer risk level as a feature, captures extension mismatch/truncation, counts findings by severity and total, and maps finding IDs to 32 deterministic SHA-256 buckets. Stable buckets let new finding IDs be represented without changing the vector width; bucket collisions are possible, so raw findings remain in `evidence` for interpretation. Category and format values outside the contract are rejected.
+
+This module only extracts features; it does not produce a verdict. Analyzer risk and findings are evidence, not ground-truth labels. The backend's `static_ml` stage is proposed to pass both reports and return an unavailable status until a compatible static model and representative labeled dataset exist. The static schema is separate from `sysmon-behavior-v1`; changing either schema must not silently alter the other.
+
 ## Heuristic risk
 
 `analyze_report()` applies bounded weights to the feature counts, transforms the sum with a logistic function, and labels the result using configured risk thresholds. This is a deterministic project heuristic. It is not a trained probability, calibration result, or measured detector accuracy.
