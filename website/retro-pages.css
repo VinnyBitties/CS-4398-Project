@@ -27,7 +27,7 @@ input:not([type="file"]):focus-visible { outline:2px solid #956516; outline-offs
 .home-page #scan-again,.home-page #view-results:not([hidden]) { padding:6px 12px; border:3px outset #eee; border-radius:0; background:#e4d6b7; color:#5a3b00; font:bold 13px Arial,Helvetica,sans-serif; }
 .home-page #view-results { text-decoration:underline; }
 .login-page { display:block; padding:24px 12px; }
-.login-main { max-width:780px; margin:auto; }
+.login-main { max-width:1100px; margin:auto; }
 .login-page .page-heading { justify-content:center; }
 .login-page .name { margin:4px 0; font-size:42px; }
 .login-page .sign-in { display:block; position:static; min-width:0; min-height:0; width:100%; max-width:420px; margin:22px auto; }
@@ -38,6 +38,25 @@ input:not([type="file"]):focus-visible { outline:2px solid #956516; outline-offs
 .login-page .submit { display:block; width:calc(100% - 24px); height:auto; margin:0 auto; padding:8px; background:#ffe082; border:3px outset #eee; border-radius:0; font-weight:bold; }
 .non-sign-in { justify-content:center; flex-wrap:wrap; margin:18px 0 6px; gap:16px; }
 .non-sign-in a { font-size:13px; }
+.ad-controls { display:flex; justify-content:space-between; align-items:center; gap:12px; margin:14px 0 10px; }
+.ad-controls .eyebrow { margin:0; }
+.ad-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(300px,420px) minmax(0,1fr); align-items:start; gap:12px; }
+.ad-column,.login-center { display:grid; min-width:0; align-content:start; gap:10px; }
+.login-center .sign-in { margin:0; }
+.ad-floor { display:grid; grid-column:1 / -1; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.ad-banner { display:flex; min-width:0; min-height:132px; height:100%; flex-direction:column; align-items:center; justify-content:center; gap:5px; padding:9px; border:4px ridge #fff; box-shadow:2px 2px #222; color:#171000; font:bold 15px "Courier New",monospace; text-align:center; text-decoration:none; text-shadow:1px 1px #fff; overflow-wrap:anywhere; }
+.ad-banner--gold { background:repeating-linear-gradient(135deg,#fff681 0 10px,#ffdb35 10px 20px); }
+.ad-banner--red { background:linear-gradient(135deg,#fff,#ff7373 45%,#ffea62); }
+.ad-banner--pink { background:repeating-linear-gradient(0deg,#ffb9ef 0 8px,#fff 8px 16px); }
+.ad-banner--blue { background:linear-gradient(135deg,#fff,#7df4ff 50%,#81aaff); }
+.ad-banner--lime { background:repeating-linear-gradient(135deg,#f6ff72 0 9px,#9dfd69 9px 18px); }
+.ad-banner--violet { background:linear-gradient(135deg,#fff,#d5a5ff 50%,#ffb4db); }
+.ad-banner--orange { background:repeating-linear-gradient(135deg,#fff5a8 0 9px,#ff9b48 9px 18px); }
+.ad-banner--cyan { background:linear-gradient(135deg,#baffef,#fff,#85ddff); }
+.ad-badge { padding:3px 6px; border:2px outset #fff; background:#b00020; color:#fff; font:bold 11px "Courier New",monospace; text-shadow:1px 1px #222; }
+.ad-pitch { font:12px "Courier New",monospace; }
+.ad-cta { margin-top:2px; padding:4px 8px; border:3px outset #fff; background:#ffe600; color:#b00000; font:bold 13px Arial,Helvetica,sans-serif; text-decoration:underline; }
+.ad-banner:hover { filter:saturate(1.35); transform:translateY(-1px); box-shadow:3px 3px #222; }
 #loginstatus,#signupstatus { color:#b00020; font:13px Arial,Helvetica,sans-serif; overflow-wrap:anywhere; }
 .popup-overlay { z-index:20; padding:16px; overflow:auto; grid-template-columns:minmax(0,420px); }
 .popup-content { width:min(420px,100%); max-height:calc(100dvh - 32px); overflow:auto; padding:14px; border:3px outset #eee; border-radius:0; background:#e4d6b7; box-shadow:4px 4px #222; }
@@ -49,3 +68,5 @@ input:not([type="file"]):focus-visible { outline:2px solid #956516; outline-offs
 .btn-close { background:#ddd; }
 @media(prefers-reduced-motion:reduce) { .home-page .spinning { animation:none; } .home-page .landing { transition:none; } }
 @media(max-width:760px) { .home-page { display:block; } .home-page .sidebar { display:flex; align-items:center; flex-wrap:wrap; gap:8px; } .home-page .account { margin-left:auto; padding:0; } .home-page .brand-coin { display:none; } .home-page .page-heading { flex-direction:column; } .login-page { padding:12px; } .login-page .name { font-size:34px; } .popup-buttons { flex-wrap:wrap; } }
+@media(max-width:820px) { .ad-layout { grid-template-columns:repeat(2,minmax(0,1fr)); } .ad-column-left { grid-column:1; grid-row:1; grid-template-columns:repeat(2,minmax(0,1fr)); } .login-center { grid-column:1 / -1; grid-row:2; } .ad-column-right { grid-column:1 / -1; grid-row:3; grid-template-columns:repeat(2,minmax(0,1fr)); } .ad-floor { grid-row:4; } }
+@media(max-width:480px) { .ad-controls { align-items:flex-start; flex-direction:column; } .ad-layout { grid-template-columns:1fr; } .ad-column-left,.login-center,.ad-column-right,.ad-floor { grid-column:1; } .ad-column-left { grid-row:1; } .login-center { grid-row:2; } .ad-column-right { grid-row:3; } .ad-floor { grid-row:4; } .ad-floor { grid-template-columns:1fr; } }
