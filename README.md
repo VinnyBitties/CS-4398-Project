@@ -42,6 +42,14 @@ Static ML is not currently registered as a backend pipeline stage. `ML/static_fe
 
 ### Run the default prototype
 
+With Python 3, Node.js 22 LTS, and npm installed, start the project from the repository root:
+
+```bash
+python3 start_project.py
+```
+
+On Windows, run `py start_project.py`. The launcher installs backend npm dependencies if needed, starts the API and dashboard, and opens the dashboard in your browser. Press Ctrl+C in the terminal to stop it. You can also start the backend manually:
+
 ```bash
 cd backend
 npm install
