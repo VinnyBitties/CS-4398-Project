@@ -2,125 +2,112 @@
 
 ## Purpose and status
 
-The backend accepts submissions, manages optional accounts, stores history, queues scan jobs, runs analysis stages, and serves the dashboard. Its status is **Partial**: the core API and default stages are implemented, while static ML is absent and later stages depend on unavailable external components.
+The backend accepts submissions, manages optional accounts, stores history, queues jobs, runs applicable analysis stages, and serves the dashboard. Its status is **Partial**: the local API/default pipeline is concrete and tested, while static ML is absent and optional sandbox/ML/LLM paths need separate configuration and verification.
 
 ## Source layout
 
 | Path | Responsibility |
 | --- | --- |
-| `backend/src/app.js` | Express middleware, routes, static site, JSON error boundary |
-| `backend/src/server.js` | Startup, database readiness, queue lifecycle, listener |
-| `backend/src/config.js` | Environment parsing and defaults |
-| `backend/src/db.js` | Shared SQLite/PostgreSQL adapter and schema |
-| `backend/src/routes/` | Health, account/session, sample, URL, history endpoints |
-| `backend/src/store/` | User/session and sample/job/result persistence |
-| `backend/src/queue/jobQueue.js` | In-process database-backed queue |
-| `backend/src/pipeline/` | Stage definitions and independent stage execution |
-| `backend/src/stages/` | Python, JSON HTTP, and multipart sandbox clients |
-| `backend/src/adapters/` | Sandbox-to-ML and pipeline-to-LLM conversion |
-| `backend/src/signatures/` | Catalog loading, validation, normalization, matching |
+| `backend/src/app.js`, `server.js` | Express composition, site serving, startup/shutdown |
+| `backend/src/routes/` | Health, auth, file/URL submission, history/detail |
+| `backend/src/db.js` | SQLite/PostgreSQL logical schema and adapters |
+| `backend/src/store/` | User/session/sample/job/result persistence |
+| `backend/src/queue/jobQueue.js` | Database-backed in-process worker queue |
+| `backend/src/pipeline/stages.js` | Stage order, routing, and optional gates |
+| `backend/scripts/content_analyze.py` | Byte-based type detection and non-PE static analysis |
+| `backend/src/analyzer/runAnalyzer.js` | Mock/real PE subprocess boundary |
+| `backend/src/stages/` | Sandbox, HTTP, and Python stage runners |
+| `backend/src/adapters/` | Sandbox-to-ML and LLM evidence translation |
+| `backend/signatures/catalog.json` | Safe demonstration indicators |
 
-## REST API
+## Routes and ownership
 
-| Method and path | Purpose | Authentication |
-| --- | --- | --- |
-| `GET /api/health` | Liveness response | None |
-| `POST /api/auth/register` | Create user and session | Guest; optional by configuration |
-| `POST /api/auth/login` | Validate credentials and create session | Guest |
-| `POST /api/auth/logout` | Delete current session and cookie | Session or no-op |
-| `GET /api/auth/me` | Return current user | Returns 401 for guest |
-| `POST /api/samples` | Store multipart field `file`, create scan job | Account or guest |
-| `POST /api/links` | Validate/store HTTP(S) URL, create scan job | Account or guest |
-| `GET /api/samples` | Paged history for current user or guest scope | Account or guest |
-| `GET /api/samples/:id` | One sample, job, and stage results | Owner scope |
+- `GET /api/health`
+- `POST /api/auth/register`, `/login`, `/logout`; `GET /api/auth/me`
+- `POST /api/samples`; `POST /api/links`
+- `GET /api/samples?limit=&offset=`; `GET /api/samples/:id`
 
-Submission normally returns `202`. Query `?wait=true` waits up to `WAIT_TIMEOUT_MS` and returns `201` only if processing finishes. See the [API contract](../../backend/docs/api-contract.md) for schemas and error codes.
+Signed-in users see their own scans; guests see guest-scope scans. Detail requests return `404` for another account's scan. Exact fields and stable error codes are in [the API contract](../../backend/docs/api-contract.md).
 
 ## Pipeline
 
-The queue calls the stages in `backend/src/pipeline/stages.js`. Each applicable stage is stored as running, then completed or failed. One stage failure does not stop later independent stages.
-
-| Stage | Enablement | Input | Output/current state |
+| Order | Stage | Gate/routing | Output |
 | --- | --- | --- | --- |
-| `signature` | Always | File SHA-256 or submitted URL | Match metadata from local catalog/bulk hash list |
-| `static_analysis` | Always for files | Stored path | Mock report by default; real report when configured |
-| `static_ml` | Not present | Intended static report | No stage registered |
-| `sandbox` | `SANDBOX_URL` | Stored file | External detonation response; service absent here |
-| `behavioral_ml` | With sandbox | Normalized telemetry | HTTP score/evidence response |
-| `llm` | `LLM_DIR` | Bounded prior reports/indicators | External bridge result; external component absent here |
+| 1 | `signature` | Always | Local hash or URL/domain match |
+| 2 | `file_type` | File; `CONTENT_ANALYZER_PATH` nonempty | Byte-derived category/format and filename warnings |
+| 3a | `static_analysis` | PE/DOS, unknown, or missing/failed type report | Mock or real PE report |
+| 3b | `content_analysis` | Every detected non-PE format, including unknown | Format-specific bounded findings and indicators |
+| — | `static_ml` | Not registered | Planned/not present |
+| 4 | `sandbox` | `SANDBOX_URL` | Raw detonation response after validation |
+| 5 | `behavioral_ml` | Added with sandbox | Score/evidence plus input summary and adapter notes |
+| 6 | `llm` | `LLM_DIR` | Demo threat intelligence, prompt, optional explanation state |
 
-## Queue and persistence
+`file_type` and `content_analysis` are enabled by default. Unknown classifications run both `static_analysis` and `content_analysis`; other recognized non-PE categories skip the PE stage. Conditional stages that do not apply create no result row. A stage exception fails that stage but does not erase earlier results or automatically stop later independent stages.
 
-Jobs move `queued → running → completed | failed`. `JOB_CONCURRENCY` controls local parallelism. Jobs left running by a process stop are re-queued on startup for the same `WORKER_ID`. The queue is durable through the database but executes inside one Node process; it is not a distributed worker system.
+## Persistence and queue
 
-SQLite is the no-service default. Setting `DATABASE_URL` selects PostgreSQL with the same logical tables. Because uploaded files live on the receiving machine, worker ownership prevents another backend using the shared database from processing a path it cannot access.
+The backend supports local SQLite or configured PostgreSQL with one logical schema for users, sessions, samples, jobs, results, and threat-intelligence indicator results. Uploaded files remain on the receiving host. `worker_id` prevents a backend using a shared database from processing jobs whose local upload belongs to another host.
 
-Stored records include users, hashed sessions, samples, jobs, stage results, and threat-intelligence indicator results. No retention job or deletion API exists.
+The queue runs in one backend process with configurable concurrency. Interrupted jobs owned by the worker are re-queued at startup. This is not a distributed worker system.
 
-## Authentication and controls
+## Authentication and browser boundary
 
-- Passwords are hashed with scrypt and per-password salts.
-- Session tokens are random; only their SHA-256 is stored.
-- Cookie is HttpOnly, `SameSite=Lax`, and conditionally Secure.
-- Login failure behavior avoids distinguishing unknown user from wrong password.
-- Per-process username/IP failure tracking applies a temporary lockout.
-- Registration can be disabled.
-- CORS permits credentials only for configured origins.
+Passwords use scrypt. The `sentinel_session` cookie carries a random token; only its SHA-256 is stored. Cookies are HttpOnly and SameSite=Lax. Enable `COOKIE_SECURE` behind HTTPS. Failed logins are rate-limited per username/IP in process.
 
-This is appropriate for a local prototype, not a complete production identity system. There is no password reset, email verification, role model, account deletion, CSRF token, or external identity provider.
+Serving `website/` from this backend is the supported local shape. A separate frontend needs an allowed `CORS_ORIGINS` entry and credentialed requests.
 
 ## Configuration
 
-Configuration is centralized in `backend/src/config.js` and documented in [Setup and Operations](../setup-and-operations.md). Important defaults include port 3000, 25 MiB uploads, job concurrency 2, a 30-second synchronous wait, 15-second analyzer timeout, 15-second requested detonation, 120-second sandbox request timeout, and a seven-day session lifetime.
+| Group | Variables |
+| --- | --- |
+| Server/site | `PORT`, `WEBSITE_DIR`, `CORS_ORIGINS` |
+| Database | `DATABASE_URL`, `DATABASE_PATH`, `DATABASE_SSL`, `DATABASE_POOL_SIZE`, `WORKER_ID` |
+| Upload/jobs | `UPLOAD_DIR`, `MAX_UPLOAD_BYTES`, `JOB_CONCURRENCY`, `WAIT_TIMEOUT_MS` |
+| PE analyzer | `PYTHON_PATH`, `ANALYZER_SCRIPT_PATH`, `ANALYZER_TIMEOUT_MS` |
+| Content analyzer | `CONTENT_ANALYZER_PATH`, `CONTENT_ANALYZER_TIMEOUT_MS` |
+| Signatures | `SIGNATURE_CATALOG_PATH`, `SIGNATURE_HASHLIST_PATH` |
+| Sandbox/ML | `SANDBOX_URL`, `SANDBOX_DETONATION_SECONDS`, `SANDBOX_TIMEOUT_MS`, `BEHAVIORAL_ML_URL`, `BEHAVIORAL_ML_TIMEOUT_MS` |
+| LLM | `LLM_DIR`, `LLM_BRIDGE_PATH`, `LLM_TIMEOUT_MS`, inherited `GROQ_API_KEY` |
+| Accounts | `SESSION_TTL_HOURS`, `COOKIE_SECURE`, `ALLOW_REGISTRATION`, `MAX_FAILED_LOGINS` |
 
-## Test inventory and observed result
+Use `backend/.env.example` for defaults and comments.
 
-Eight Node test files cover:
+## Tests
 
-- API submission/history and stable failure behavior.
-- Registration, login, sessions, ownership, CORS, and static serving.
-- Signature catalog validation and matching.
-- Queue transitions, concurrency, crash recovery, ownership, and wait timeout.
-- Generic HTTP-stage errors.
-- Sandbox client, telemetry adapter, behavioral-ML integration, and serialized detonations.
-- LLM input filtering/bounding, bridge behavior, ordering, and independent failure.
-- Real static-analyzer boundary, conditionally skipped without its dependency.
+`npm test` runs top-level `backend/test/*.test.js` covering auth, routes, storage, jobs, catalog behavior, content routing, dashboard data, HTTP stages, sandbox/ML, LLM bridge, and PE analyzer boundaries. `npm run test:dashboard` runs Playwright tests from `backend/test/dashboard/`.
 
-On 2026-11-03, `npm test` did not start because the available npm shim reported unsupported WSL 1. No backend test assertion result was observed in that environment. Historical counts in `backend/README.md` are not substituted for this result.
+Fresh results are recorded in [Prototype Status](../prototype-status.md#verification-record). Mock sandbox/provider tests verify consumer boundaries, not live service safety or external-provider behavior.
 
-## Operational and security notes
+## Failure behavior
 
-- The backend stores arbitrary uploads before PE validation; protect and isolate the upload directory.
-- `COOKIE_SECURE=false` is for local HTTP only.
-- The default catalog contains safe test indicators, not a production feed.
-- URL submissions are normalized and checked but never fetched by the backend signature stage.
-- Optional external services receive file content, telemetry, or indicators; review their data handling first.
-- The static analyzer output is schema-version checked and size bounded by the subprocess runner.
-- Tests must use a disposable PostgreSQL database because the PostgreSQL suite clears its tables.
+- Validation errors use stable JSON error codes; oversized uploads return `413`.
+- Invalid catalog configuration stops startup.
+- Python/HTTP launch, timeout, nonzero, status, and JSON errors are stored on their stage.
+- Empty/parse-failed sandbox output is rejected rather than scored as zero activity.
+- `llm` explanation states are `generated`, `skipped`, `error`, or `not_generated`; missing credentials/provider errors do not discard demo intelligence and prompt output.
+- A scan may reach job status `completed` with one or more failed stages.
 
-## Known limitations
+## Security and operational limits
 
-- Default mock analyzer means the easiest startup does not extract real PE features.
-- No static-ML stage.
-- No real sandbox or threat-intelligence source tree in this branch.
-- Single-process queue and local upload storage limit scaling.
-- No upload/record deletion or retention policy.
-- Guest scans are allowed.
-- No deployment proxy, TLS, monitoring, structured audit, backup, or disaster-recovery configuration.
+- Uploaded files and reports need retention/deletion policy and access controls.
+- Guest scanning is enabled by default.
+- Local upload storage plus one-process queue constrain horizontal scaling.
+- The default PE analyzer is a mock; findings are not a production verdict.
+- Optional services can receive sensitive telemetry/indicators and need independent authentication, TLS, and policy review.
+- No production audit log, metrics/tracing stack, backup, artifact storage, or secret manager is supplied.
 
 ## Next work
 
-1. Run the suite under supported Node/WSL and update observed evidence.
-2. Decide when the real analyzer becomes the default.
-3. Add static ML behind a versioned contract and artifact configuration.
-4. Validate sandbox safety and real telemetry before enabling detonation.
-5. Connect dashboard history/detail views.
-6. Add retention/deletion and production deployment controls.
+1. Define and implement the missing static-ML stage and contract.
+2. Consolidate stage schemas and expose capabilities to the frontend.
+3. Add retention/deletion endpoints and policy.
+4. Add production auth/TLS/observability/secrets guidance.
+5. Verify dynamic/ML/LLM integrations with inert end-to-end fixtures and versioned outputs.
 
 ## Related documentation
 
 - [Backend README](../../backend/README.md)
 - [API contract](../../backend/docs/api-contract.md)
-- [Database notes](../../backend/docs/azure-database.md)
 - [Architecture](../architecture.md)
+- [Setup and Operations](../setup-and-operations.md)
 - [Prototype Status](../prototype-status.md)

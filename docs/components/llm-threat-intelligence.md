@@ -2,116 +2,124 @@
 
 ## Purpose and status
 
-The planned component should convert analysis evidence into a plain-language explanation, map supported behaviors to MITRE ATT&CK, and provide recommendations with traceable evidence. Its current status is **Stubbed/configurable**.
+This component builds bounded analysis evidence, validates/enriches indicators against a demonstration map, and can optionally ask Groq for a plain-language explanation. Its status is **Partial**.
 
-This branch contains a bounded input adapter, pipeline stage, and Python bridge for an external `llm-threat-intelligence/` directory. That external component is absent. No provider, model, prompt artifact, LLM call, explanation, citation scheme, or ATT&CK mapper is implemented here.
+The external-component source is now committed in `llm-threat-intelligence/`, and the bridge can call Groq model `openai/gpt-oss-20b`. MITRE ATT&CK mapping, evidence citations, a production intelligence feed, a versioned output schema, and provider evaluation are not implemented.
 
-## Code that is present
+## Source layout
 
 | Path | Responsibility |
 | --- | --- |
-| `backend/src/adapters/llmInput.js` | Assemble prior stage reports, extract/filter indicators, bound event/indicator lists |
-| `backend/scripts/llm_bridge.py` | Import the external component and exchange JSON through stdin/stdout |
-| `backend/src/pipeline/stages.js` | Add the final `llm` stage when `LLM_DIR` is configured |
-| `backend/src/stages/pythonStage.js` | Bounded Python subprocess execution and error handling |
-| `backend/test/llmStage.test.js` | Adapter, bridge, ordering, link, and failure tests |
+| `backend/src/adapters/llmInput.js` | Builds bounded prior-stage report and extracts indicators |
+| `backend/scripts/llm_bridge.py` | JSON stdin/stdout bridge, demo lookup, prompt, optional explanation/fallback |
+| `backend/src/pipeline/stages.js` | Adds final `llm` stage when `LLM_DIR` is configured |
+| `backend/src/stages/pythonStage.js` | Bounded subprocess execution/error mapping |
+| `llm-threat-intelligence/threat_intel.py` | Indicator validation and small demo indicator map |
+| `llm-threat-intelligence/llm_analyzer.py` | Evidence prompt and optional Groq call |
+| `backend/test/llmStage.test.js` | Adapter, bridge, fallback, ordering, and pipeline tests |
 
-## Enablement and execution
+## Enablement
+
+Install the root Python requirements in the interpreter named by `PYTHON_PATH`, then configure:
 
 ```dotenv
 LLM_DIR=../llm-threat-intelligence
 LLM_BRIDGE_PATH=./scripts/llm_bridge.py
 LLM_TIMEOUT_MS=30000
-PYTHON_PATH=python3
+# GROQ_API_KEY=...  # optional; never commit
 ```
 
-When enabled, the stage runs last for files and URLs. It receives any stored signature, static-analysis, sandbox, and behavioral-ML reports; failed or unavailable stages are represented as empty/missing evidence rather than invented results. The bridge receives a report plus indicators as JSON on stdin and must return JSON on stdout.
+The stage runs last for files and links. Failed/missing earlier stages remain absent evidence rather than being invented.
 
-If the directory is missing, import fails, execution times out, the process exits nonzero, output exceeds bounds, or JSON is invalid, only the `llm` stage fails.
+## Input preparation
 
-## Evidence and indicator preparation
-
-The adapter preserves earlier reports while bounding high-volume event lists. It records truncation so downstream prose should not imply that a shortened list is complete.
+The adapter includes the sample identity and available signature, static, sandbox, and behavioral-ML reports. High-volume event/indicator lists are bounded and truncation is recorded.
 
 Candidate indicators include:
 
-- File SHA-256 for file submissions.
-- Submitted URL and host for link submissions.
-- Public domains and selected standalone IP addresses observed in sandbox telemetry.
+- File SHA-256.
+- Submitted URL and domain.
+- Public domains and selected standalone public IPs found in telemetry.
 
-The adapter filters selected standalone private, loopback, link-local, and other nonpublic IP indicators. That filter does not redact the complete submitted URL: a URL such as `http://127.0.0.1/` remains a URL indicator. Earlier-stage reports also retain raw telemetry fields for the bridge. Indicator count and event-list length are capped, but submitted URLs and raw telemetry are not otherwise redacted. These bounds reduce volume; they are not a complete privacy review or sensitive-data policy.
+Selected standalone private, loopback, link-local, and nonpublic IP indicators are filtered. Submitted URLs and raw report fields are not comprehensively redacted, so a private address can still appear inside a URL or telemetry. Bounding is not a privacy policy.
 
-## Output currently available
+## Threat intelligence
 
-The bridge is expected to return threat-intelligence results for indicators and a prompt built from evidence. The backend can store indicator results and the stage report. The backend README explicitly records that the component does not yet call an LLM, so generated `explanation` is absent/null in the represented integration.
+`threat_intel.py` validates hash/IP/domain/URL syntax and checks a small in-code demonstration map. Results can be `unsupported`, `invalid`, `suspicious`, or `not_found`. `not_found` explicitly does not mean safe.
 
-No committed schema requires:
+This is not a live commercial/community feed. There is no feed version, coverage statement, update process, SLA, or accuracy evaluation.
 
-- Evidence citations from sentences to stage/report fields.
-- MITRE tactic/technique identifiers and versions.
-- Confidence or uncertainty.
-- Recommendations or severity.
-- Refusal/fallback behavior when evidence is insufficient.
-- Prompt/model/provider metadata.
+## Optional Groq explanation
 
-Those contracts must be defined before the dashboard treats output as an analyst report.
+`llm_analyzer.py` builds a prompt from supplied evidence and, when `GROQ_API_KEY` exists, calls Groq with:
 
-## Configuration record
+- Model: `openai/gpt-oss-20b`
+- `max_tokens`: 500
+- System instruction: remain grounded in supplied evidence and admit insufficiency
 
-| Field | Current value |
+The bridge treats explanation generation as optional:
+
+| `explanation_status` | Meaning |
 | --- | --- |
-| Provider/model | Not recorded; external component absent |
-| API/SDK version | Not recorded |
-| Temperature/token limits | Not recorded |
-| Prompt version | Not recorded |
-| Timeout | Backend default 30 seconds |
-| Retry behavior | No retry in current bridge stage |
-| Cost controls | Not recorded |
-| Data sent externally | No provider call in branch; candidate evidence/indicators prepared by adapter |
-| Redaction/minimization | Selected standalone IP filter and list bounds only; submitted URLs and raw telemetry remain unredacted |
+| `generated` | Groq returned explanation text |
+| `skipped` | `GROQ_API_KEY` was not set |
+| `error` | Provider/import/network/key/rate-limit call failed |
+| `not_generated` | Loaded component has no generator function |
 
-## Test inventory and observed result
+For `skipped`, `error`, and `not_generated`, the stage can still return demo threat intelligence and the prompt. Prompt/intelligence construction failures still fail the stage.
 
-The Node tests cover file and URL indicators, private-address exclusion, telemetry truncation, bridge success/failure, missing directory, component exception, stage ordering, link participation, and independent pipeline failure. They use fixtures or a temporary external-component shape, not a real provider.
+## Output and missing contract
 
-On 2026-11-03, `npm test` did not start because the available npm shim reported unsupported WSL 1. No real model, enrichment provider, prompt, or MITRE mapping was tested.
+The backend stores:
 
-## Grounding and mapping requirements
+- `threat_intel[]`
+- `prompt`
+- `explanation` or `null`
+- `explanation_status` and optional `explanation_error`
+- Extracted `indicators[]`
+- `stages_used[]`
 
-Before this component can be considered implemented, each report claim should identify the source stage and evidence field, distinguish observed facts from model/heuristic inferences, state missing/failed stages, and avoid converting “no evidence” into “benign.” MITRE mappings should include tactic/technique identifiers, evidence, confidence, ATT&CK version/date, and human review outcome.
+There is no versioned schema for cited claims, severity/confidence, recommendations, ATT&CK tactic/technique IDs, ATT&CK version, or reviewer disposition. The dashboard also lacks a dedicated safe explanation/mapping viewer.
 
-Fallback output should remain useful when no provider is available: structured evidence, stage statuses, explicit uncertainty, and no fabricated narrative.
+## Tests
 
-## Security and privacy notes
+`backend/test/llmStage.test.js` covers indicator validation/filtering, event/indicator bounds, missing component, bridge exception, all explanation fallback states using temporary modules, ordering, file/link participation, and independent stage failure.
 
-- Telemetry, strings, domains, IPs, URLs, filenames, and hashes can be sensitive even without file content.
-- Define provider retention/training terms and approved data classes before external calls.
-- Store credentials outside source and reports; use least-privilege secrets.
-- Treat model output as untrusted text and render safely.
-- Prompt injection can exist in extracted strings, URLs, or telemetry; delimit evidence and prevent it from changing system instructions.
-- ATT&CK mappings and remediation advice require human review until measured.
+These tests do not call Groq or validate ATT&CK mappings. Fresh Node results are in [Prototype Status](../prototype-status.md#verification-record).
+
+## Security, privacy, and grounding
+
+- Telemetry, strings, URLs, domains, IPs, paths, filenames, and hashes can be sensitive.
+- Approve provider retention/training terms and allowed data before setting a real key.
+- Extracted content can contain prompt injection; current prompt formatting is not a complete delimiter/policy defense.
+- Render output as untrusted text.
+- Store secrets outside source/reports and use least privilege.
+- A generated explanation is analyst assistance, not an independent verdict.
+- Claims and future ATT&CK mappings require source-field citations and human review.
 
 ## Known limitations
 
-- External implementation absent.
-- No LLM provider/model invocation.
-- No versioned prompt or output schema.
-- No citations, hallucination controls, ATT&CK validation, cost limits, or redaction policy.
-- No accuracy, mapping precision, or analyst usability evaluation.
+- Demo-only threat-intelligence coverage.
+- No MITRE ATT&CK mapping implementation.
+- No sentence-level evidence citations or versioned output schema.
+- No prompt version, temperature setting, retry/backoff, cost budget, or provider/model evaluation.
+- No complete redaction/data-class policy.
+- No dashboard report renderer for the explanation/mappings.
 
 ## Next work
 
-1. Define the versioned input/output schema and evidence-citation format.
-2. Select provider/model under an approved privacy and cost policy.
-3. Add prompt/version metadata, deterministic fallbacks, timeouts/retries, and secret handling.
-4. Implement ATT&CK mapping with versioned technique identifiers and reviewer workflow.
-5. Build adversarial tests for prompt injection, missing evidence, false mappings, and unsupported claims.
-6. Connect a safe detailed report renderer in the dashboard.
+1. Define a versioned, cited structured output contract.
+2. Add reviewed ATT&CK technique mapping with evidence and ATT&CK version.
+3. Establish provider/privacy/retention/cost policy and secret handling.
+4. Add prompt-injection, missing-evidence, false-mapping, and unsupported-claim evaluations.
+5. Replace/augment demo intelligence with an approved versioned feed.
+6. Add a safe dashboard renderer and reviewer workflow.
 
 ## Related documentation
 
+- [Component README](../../llm-threat-intelligence/README.md)
+- [Component status](../../llm-threat-intelligence/STATUS.md)
 - [Architecture](../architecture.md)
-- [Backend component](backend.md)
-- [Frontend component](frontend.md)
+- [Backend](backend.md)
+- [Frontend](frontend.md)
 - [Prototype Status](../prototype-status.md)
-- [Setup and Operations](../setup-and-operations.md)

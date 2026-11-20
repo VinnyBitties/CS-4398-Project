@@ -70,35 +70,35 @@ CORE_MARKDOWN_FILES = {
 WORD_FORMS = {
     "Sentinel_Backend_Development_Documentation_Form.docx": (
         "Backend Development Documentation Form",
-        "BE-DOC-20261103",
+        "BE-DOC-20261119",
     ),
     "Sentinel_Documentation_All_Rounder_Documentation_Form.docx": (
         "Documentation and All Rounder Documentation Form",
-        "DOC-DOC-20261103",
+        "DOC-DOC-20261119",
     ),
     "Sentinel_Dynamic_Analysis_Documentation_Form.docx": (
         "Dynamic Analysis Documentation Form",
-        "DA-DOC-20261103",
+        "DA-DOC-20261119",
     ),
     "Sentinel_Frontend_Development_Documentation_Form.docx": (
         "Frontend Development Documentation Form",
-        "FE-DOC-20261103",
+        "FE-DOC-20261119",
     ),
     "Sentinel_LLM_Threat_Intelligence_Documentation_Form.docx": (
         "LLM and Threat Intelligence Documentation Form",
-        "LLM-DOC-20261103",
+        "LLM-DOC-20261119",
     ),
     "Sentinel_Machine_Learning_Documentation_Form.docx": (
         "Machine Learning Documentation Form",
-        "ML-DOC-20261103",
+        "ML-DOC-20261119",
     ),
     "Sentinel_Malware_Detection_Documentation_Form.docx": (
         "Malware Detection Documentation Form",
-        "MD-DOC-20261103",
+        "MD-DOC-20261119",
     ),
     "Sentinel_Project_Wide_Documentation_Record.docx": (
         "Project Wide Documentation Record",
-        "PW-DOC-20261103",
+        "PW-DOC-20261119",
     ),
 }
 
@@ -192,6 +192,79 @@ class DocumentationEvidenceTests(unittest.TestCase):
         self.assertIn("submitted URLs", combined)
         self.assertIn("raw telemetry", combined)
 
+    def test_current_snapshot_cites_new_component_implementations_and_limits(self) -> None:
+        evidence = load_evidence()
+        self.assertEqual("2026-11-19", evidence["metadata"]["version_date"])
+
+        def paths(component: str) -> set[str]:
+            return {entry["path"] for entry in evidence["components"][component]["evidence"]}
+
+        self.assertTrue(
+            {
+                "website/dashboard/reports.js",
+                "website/dashboard/static-evidence.js",
+                "backend/test/dashboardData.test.js",
+                "backend/test/dashboard/reports.browser.test.js",
+            }.issubset(paths("frontend"))
+        )
+        self.assertTrue(
+            {
+                "backend/scripts/content_analyze.py",
+                "backend/test/contentAnalysis.test.js",
+            }.issubset(paths("backend"))
+        )
+        backend = " ".join(evidence["components"]["backend"]["present_implementation"])
+        self.assertIn("Unknown classifications run both `static_analysis` and `content_analysis`", backend)
+        self.assertTrue(
+            {
+                "ML/SYNTHETIC_DATA.md",
+                "ML/synthetic_reports.py",
+                "ML/split_dataset.py",
+                "ML/tune_threshold.py",
+                "ML/test_training.py",
+                "ML/test_end_to_end.py",
+            }.issubset(paths("machine_learning"))
+        )
+        self.assertIn("dynamic_telemetry/api.py", paths("dynamic_analysis"))
+        dynamic = " ".join(
+            evidence["components"]["dynamic_analysis"]["present_implementation"]
+            + evidence["components"]["dynamic_analysis"]["limitations"]
+        ).lower()
+        for gap in ("sample transfer", "evtx export", "containment", "live detonation"):
+            self.assertIn(gap, dynamic)
+
+        self.assertTrue(
+            {
+                "llm-threat-intelligence/llm_analyzer.py",
+                "llm-threat-intelligence/threat_intel.py",
+            }.issubset(paths("llm_threat_intelligence"))
+        )
+        llm = " ".join(
+            evidence["components"]["llm_threat_intelligence"]["present_implementation"]
+            + evidence["components"]["llm_threat_intelligence"]["configuration"]
+            + evidence["components"]["llm_threat_intelligence"]["limitations"]
+        )
+        self.assertIn("Groq", llm)
+        self.assertIn("openai/gpt-oss-20b", llm)
+        self.assertIn("MITRE ATT&CK", llm)
+
+        self.assertIn(
+            "dynamic_telemetry/api.py",
+            evidence["requirements"]["FR04"]["implementation_evidence"],
+        )
+        self.assertIn(
+            "ML/test_end_to_end.py",
+            evidence["requirements"]["FR05"]["test_evidence"],
+        )
+        self.assertIn(
+            "llm-threat-intelligence/llm_analyzer.py",
+            evidence["requirements"]["FR06"]["implementation_evidence"],
+        )
+        self.assertIn(
+            "backend/test/dashboard/reports.browser.test.js",
+            evidence["requirements"]["FR07"]["test_evidence"],
+        )
+
 
 class MarkdownDocumentationTests(unittest.TestCase):
     """Catch missing entry points, broken local links, and incomplete traceability."""
@@ -259,6 +332,177 @@ class MarkdownDocumentationTests(unittest.TestCase):
                     broken.append(f"{relative_path} -> {target}")
         self.assertEqual([], sorted(broken), f"Broken local Markdown links: {broken}")
 
+    def test_core_docs_describe_the_current_pipeline_and_integrations(self) -> None:
+        paths = (
+            "README.md",
+            "docs/project-overview.md",
+            "docs/architecture.md",
+            "docs/setup-and-operations.md",
+            "docs/prototype-status.md",
+            "docs/documentation-index.md",
+        )
+        documents = {
+            relative: (REPOSITORY_ROOT / relative).read_text(encoding="utf-8")
+            for relative in paths
+        }
+        combined = "\n".join(documents.values())
+
+        self.assertIn("2026-11-19", combined)
+        for stage in ("file_type", "content_analysis"):
+            self.assertIn(stage, combined)
+        for current_fact in (
+            "website/dashboard/reports.js",
+            "dynamic_telemetry/api.py",
+            "openai/gpt-oss-20b",
+            "ML/SYNTHETIC_DATA.md",
+        ):
+            self.assertIn(current_fact, combined)
+
+        self.assertIn("synthetic", combined.lower())
+        self.assertIn("scan history", combined.lower())
+        self.assertIn("GROQ_API_KEY", combined)
+        self.assertIn("sample transfer", combined.lower())
+        self.assertIn("EVTX", combined)
+        self.assertIn("Do not execute real malware", combined)
+
+        stale_claims = (
+            "reports page also does not yet load the stored scan history",
+            "reports page is a placeholder",
+            "reports page remains disconnected",
+            "actual sandbox implementation is absent",
+            "external component, provider, model, explanation, and ATT&CK mapper are absent",
+            "external threat-intelligence component and model invocation are absent",
+        )
+        findings = [
+            f"{relative}: {claim}"
+            for relative, text in documents.items()
+            for claim in stale_claims
+            if claim.lower() in text.lower()
+        ]
+        self.assertEqual([], findings)
+
+    def test_unknown_file_routing_is_described_as_dual_analysis(self) -> None:
+        routing_docs = (
+            "README.md",
+            "backend/README.md",
+            "backend/docs/api-contract.md",
+            "docs/architecture.md",
+            "docs/prototype-status.md",
+            "docs/setup-and-operations.md",
+            "docs/components/backend.md",
+            "docs/components/malware-detection.md",
+        )
+        expected = "Unknown classifications run both `static_analysis` and `content_analysis`"
+        errors: list[str] = []
+        for relative_path in routing_docs:
+            text = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+            if expected not in text:
+                errors.append(f"{relative_path}: missing dual-analysis routing statement")
+        self.assertEqual([], errors)
+
+    def test_unexecuted_browser_and_ml_suites_are_not_described_as_proof(self) -> None:
+        documents = {
+            "docs/components/frontend.md": (REPOSITORY_ROOT / "docs/components/frontend.md").read_text(encoding="utf-8"),
+            "docs/components/machine-learning.md": (REPOSITORY_ROOT / "docs/components/machine-learning.md").read_text(encoding="utf-8"),
+            "docs/architecture.md": (REPOSITORY_ROOT / "docs/architecture.md").read_text(encoding="utf-8"),
+        }
+        forbidden = {
+            "docs/components/frontend.md": "primary workflows are connected and browser-tested",
+            "docs/components/machine-learning.md": "This proves the development workflow connects",
+            "docs/architecture.md": "It proves the development pipeline can connect",
+        }
+        findings = [
+            f"{path}: {claim}"
+            for path, claim in forbidden.items()
+            if claim in documents[path]
+        ]
+        self.assertEqual([], findings)
+        self.assertIn("current Playwright command was blocked", documents["docs/components/frontend.md"])
+        self.assertIn("current end-to-end test was blocked", documents["docs/components/machine-learning.md"])
+        self.assertIn("current end-to-end execution was blocked", documents["docs/architecture.md"])
+
+
+class ComponentDocumentationTests(unittest.TestCase):
+    """Keep component records and narrow guides aligned with current source."""
+
+    @staticmethod
+    def combined(*relative_paths: str) -> str:
+        return "\n".join(
+            (REPOSITORY_ROOT / relative).read_text(encoding="utf-8")
+            for relative in relative_paths
+        )
+
+    def test_frontend_docs_cover_connected_reports_and_browser_tests(self) -> None:
+        text = self.combined(
+            "docs/components/frontend.md",
+            "website/dashboard/README.md",
+        )
+        for term in (
+            "website/dashboard/reports.js",
+            "website/dashboard/static-evidence.js",
+            "backend/test/dashboardData.test.js",
+            "backend/test/dashboard/reports.browser.test.js",
+        ):
+            self.assertIn(term, text)
+        self.assertIn("paged scan history", text.lower())
+        self.assertIn("Playwright", text)
+
+    def test_backend_docs_cover_current_routing_and_llm_states(self) -> None:
+        text = self.combined(
+            "docs/components/backend.md",
+            "backend/README.md",
+            "backend/docs/api-contract.md",
+        )
+        for term in ("file_type", "content_analysis"):
+            self.assertIn(term, text)
+        for status in ("generated", "skipped", "error", "not_generated"):
+            self.assertIn(status, text)
+        self.assertIn("CONTENT_ANALYZER_PATH", text)
+
+    def test_ml_docs_cover_reproducible_synthetic_workflow_without_accuracy_claims(self) -> None:
+        text = self.combined(
+            "docs/components/machine-learning.md",
+            "ML/SYNTHETIC_DATA.md",
+        )
+        for path in (
+            "ML/synthetic_reports.py",
+            "ML/split_dataset.py",
+            "ML/tune_threshold.py",
+            "ML/test_end_to_end.py",
+        ):
+            self.assertIn(path, text)
+        self.assertIn("feature-schema", text.lower())
+        self.assertIn("synthetic", text.lower())
+        self.assertIn("not real-world", text.lower())
+
+    def test_dynamic_docs_record_present_source_and_unverified_safety_gaps(self) -> None:
+        text = self.combined(
+            "docs/components/dynamic-analysis.md",
+            "dynamic_telemetry/README.md",
+        )
+        self.assertIn("dynamic_telemetry/api.py", text)
+        for term in ("sample transfer", "EVTX export", "network isolation", "live detonation"):
+            self.assertIn(term, text)
+        self.assertIn("Do not execute real malware", text)
+
+    def test_llm_docs_record_optional_groq_path_and_missing_attack_mapping(self) -> None:
+        text = self.combined(
+            "docs/components/llm-threat-intelligence.md",
+            "llm-threat-intelligence/README.md",
+            "llm-threat-intelligence/STATUS.md",
+        )
+        for term in (
+            "Groq",
+            "openai/gpt-oss-20b",
+            "GROQ_API_KEY",
+            "skipped",
+            "error",
+            "demo",
+            "MITRE ATT&CK",
+        ):
+            self.assertIn(term, text)
+        self.assertIn("not implemented", text.lower())
+
 
 class WordDocumentationTests(unittest.TestCase):
     """Catch invalid Office packages, unfilled responses, and duplicate reconciliation rows."""
@@ -295,7 +539,7 @@ class WordDocumentationTests(unittest.TestCase):
             text = extract_docx_text(REPOSITORY_ROOT / filename)
             if title not in text:
                 errors.append(f"{filename}: missing title {title}")
-            if "2026-11-03" not in text:
+            if "2026-11-19" not in text:
                 errors.append(f"{filename}: missing current update date")
             count = text.count(change_id)
             if count != 1:
@@ -356,6 +600,53 @@ class WordDocumentationTests(unittest.TestCase):
             for term in ("status", "evidence", "limitation", "handoff"):
                 if term not in text:
                     findings.append(f"{filename}: missing {term}")
+        self.assertEqual([], findings)
+
+    def test_component_forms_capture_current_implementation_and_limits(self) -> None:
+        expected_terms = {
+            "Sentinel_Backend_Development_Documentation_Form.docx": (
+                "Unknown classifications run both `static_analysis` and `content_analysis`",
+            ),
+            "Sentinel_Frontend_Development_Documentation_Form.docx": (
+                "reports-data.js",
+                "static-evidence.js",
+                "Playwright",
+                "paged history",
+            ),
+            "Sentinel_Machine_Learning_Documentation_Form.docx": (
+                "ML/synthetic_reports.py",
+                "ML/test_end_to_end.py",
+                "feature-schema",
+                "not real-world",
+            ),
+            "Sentinel_Dynamic_Analysis_Documentation_Form.docx": (
+                "dynamic_telemetry/api.py",
+                "sample transfer",
+                "EVTX export",
+                "network isolation",
+                "Do not execute real malware",
+            ),
+            "Sentinel_LLM_Threat_Intelligence_Documentation_Form.docx": (
+                "Groq",
+                "openai/gpt-oss-20b",
+                "GROQ_API_KEY",
+                "Groq Python package from root requirements.txt",
+                "MITRE ATT&CK",
+                "not implemented",
+            ),
+        }
+        findings: list[str] = []
+        for filename, terms in expected_terms.items():
+            text = extract_docx_text(REPOSITORY_ROOT / filename)
+            for term in terms:
+                if term not in text:
+                    findings.append(f"{filename}: missing {term}")
+            if "ML/generate_synthetic_data.py" in text:
+                findings.append(f"{filename}: retains nonexistent ML/generate_synthetic_data.py")
+            if "llm-threat-intelligence/requirements.txt" in text:
+                findings.append(f"{filename}: cites nonexistent llm-threat-intelligence/requirements.txt")
+            if filename == "Sentinel_LLM_Threat_Intelligence_Documentation_Form.docx" and "External component/provider" in text:
+                findings.append(f"{filename}: retains superseded external-component dependency row")
         self.assertEqual([], findings)
 
     def test_project_record_covers_every_functional_requirement(self) -> None:

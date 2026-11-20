@@ -2,109 +2,115 @@
 
 ## Purpose and status
 
-The frontend provides account entry, guest access, file or URL submission, and a stage-by-stage progress display. Its current status is **Partial**: the submission path is connected to the backend, but report history and detailed result presentation are unfinished.
+The frontend provides account/guest entry, multi-format file or URL submission, scan progress, paged scan history, behavioral summaries, and detailed PE evidence. Its status is **Partial**: the primary workflows are connected and have committed Node/Playwright coverage, but not every backend stage has a complete detail view and no formal accessibility/usability evaluation exists. The current Playwright command was blocked by Node/npm platform detection before any browser test ran.
 
 ## Source layout
 
 | Path | Responsibility |
 | --- | --- |
-| `website/index.html` | Login, account creation, and guest entry |
-| `website/api.js` | Shared Fetch wrapper, authentication calls, submissions, polling retrieval, account rendering |
-| `website/dashboard/home.html` | File/URL input, progress animation, polling, scan reset |
-| `website/dashboard/reports.html` | Report list and pagination scaffold; no API integration |
-| `website/style.css` | Login/account page styles |
-| `website/dashboard/*.css` | Dashboard, home, and report styles |
+| `website/index.html` | Login, registration, and guest entry |
+| `website/api.js` | Shared authenticated Fetch wrapper, submissions, history/detail calls |
+| `website/dashboard/home.html` | File/URL input, supported extension list, stage progress, summarized content findings, Reports link |
+| `website/dashboard/reports.html` | Paged history and selected-scan panels |
+| `website/dashboard/reports.js` | History, selection, polling, retry, safe DOM updates |
+| `website/dashboard/reports-data.js` | Browser/Node shared behavioral and stage-state normalization |
+| `website/dashboard/static-evidence.js` | Detailed PE evidence rendering |
+| `website/retro*.css`, `retro-loading.js` | Shared retro theme and reduced-motion-aware reveal |
+| `website/dashboard/README.md` | Report UI operation and browser-test instructions |
 
-The backend serves this directory by default, which keeps pages and session cookies on one origin.
+The backend serves `website/` by default, keeping pages, API, and HttpOnly session cookie on one origin.
 
-## Screens and user workflows
+## User workflows
 
-### Login and registration
+### Account or guest entry
 
-The root page attempts `GET /api/auth/me`; an existing session redirects to the dashboard. Login sends a username/password to `POST /api/auth/login`. Registration validates matching passwords in the browser, calls `POST /api/auth/register`, and redirects on success. “No Sign In” enters the dashboard as a guest.
+The root page checks `GET /api/auth/me`. Login and registration call the corresponding backend endpoints; successful registration also creates a session. “No Sign In” enters the guest scope. The browser never stores the raw session token.
 
-The browser never stores a session token directly. The backend owns an HttpOnly cookie. When the site is served separately, `api.js` sends `credentials: include` and the origin must be allowed by backend CORS configuration.
+### File or URL submission
 
-### File submission
+Home accepts click or drag-and-drop files from a documented extension list covering executables, Office, PDF, scripts, source, archives, shortcuts, and web content. Extension filtering is a picker/usability guard only; backend `file_type` detection from bytes is authoritative.
 
-The home page accepts click or drag-and-drop selection and checks for a lowercase-normalized `.exe` suffix. Submission creates `FormData` with field name `file` and calls `POST /api/samples`. File content and PE validity are not examined in the browser.
+Files use multipart field `file` with `POST /api/samples`. URLs use `{ "url": value }` with `POST /api/links`. The backend validates/normalizes URLs and never fetches them.
 
-### URL submission
+### Progress and result navigation
 
-Typing in the URL field selects a string submission and clears the selected file display. The frontend sends `{ "url": value }` to `POST /api/links`. The backend performs URL normalization and validation.
+Home polls `GET /api/samples/:id`, maps returned stage state into six conceptual steps, and exposes “View results” immediately after submission. Home also surfaces file-type and content-analysis summaries. Stages that are absent at terminal state are shown as not run/skipped rather than failed.
 
-### Progress display
+### Paged scan history and detail
 
-After a successful `202` response, the page polls `GET /api/samples/:id`. It maps stored stage names to six conceptual UI steps:
+The Reports page calls `GET /api/samples?limit=20&offset=N`, newest first. `sample_id` and `page` query parameters preserve selection and pagination on reload. Account/guest visibility follows the API's ownership rules.
 
-1. Signature
-2. Static analysis
-3. Static ML score
-4. Sandbox
-5. Behavioral ML score
-6. Report
+Active scans refresh every two seconds. Polling pauses while the tab is hidden, stops for terminal jobs, and pauses on request errors until Retry. A slower previous request cannot overwrite a newly selected scan.
 
-Running, completed, failed, and skipped/not-run labels are shown. Because `static_ml` does not exist and optional stages may be disabled, several conceptual steps normally end as skipped. A network failure uses a longer retry; a non-network HTTP error ends the view. “Scan another” clears the polling timer and form/progress state.
+## Result interpretation
+
+- Signature state is independent from ML risk.
+- `risk_score` is displayed as a percentage and labeled with its heuristic/trained source; it is not detection accuracy.
+- Anomaly output remains separate from the classifier/heuristic verdict.
+- Failed or empty sandbox telemetry suppresses historical ML output rather than becoming zero activity.
+- Raw and normalized sandbox field names are accepted; summary counts take precedence over abbreviated event arrays.
+- Dynamic values are rendered as text. Browser tests include injection-shaped fixture content and verify no element execution.
+- Detailed PE panels cover sections, imports, strings, resources, warnings, reputation, and YARA state when the real 1.2.0 report exists.
 
 ## API boundary
 
-| Operation | Frontend helper | Backend route |
-| --- | --- | --- |
-| Current user | `auth.currentUser()` | `GET /api/auth/me` |
-| Login | `auth.login()` | `POST /api/auth/login` |
-| Register | `auth.register()` | `POST /api/auth/register` |
-| Logout | `auth.logout()` | `POST /api/auth/logout` |
-| File submission | `scans.submitFile()` | `POST /api/samples` |
-| URL submission | `scans.submitLink()` | `POST /api/links` |
-| Poll one scan | `scans.get()` | `GET /api/samples/:id` |
-| List history | Not implemented | `GET /api/samples` |
+| Operation | Route |
+| --- | --- |
+| Current user | `GET /api/auth/me` |
+| Register/login/logout | `POST /api/auth/register`, `/login`, `/logout` |
+| Submit file | `POST /api/samples` |
+| Submit URL | `POST /api/links` |
+| Paged scan history | `GET /api/samples?limit=20&offset=N` |
+| Selected scan/polling | `GET /api/samples/:id` |
 
-Exact request and response fields are in the [backend API contract](../../backend/docs/api-contract.md).
+Exact shapes are in the [backend API contract](../../backend/docs/api-contract.md).
 
-## Configuration and startup
+## Testing
 
-Run the backend and open `http://localhost:3000/`; no separate frontend build is required. If another server hosts the static files, set `window.SENTINEL_API_BASE` or use the built-in fallback to `http://localhost:3000`, then add that page origin to `CORS_ORIGINS`.
+| Test source | Coverage |
+| --- | --- |
+| `backend/test/dashboardData.test.js` | Seven Node tests for raw/normalized telemetry, unavailable data, risk/anomaly separation, signatures, and stage state |
+| `backend/test/dashboard/reports.browser.test.js` | Eight Playwright tests for history, selection, polling, retry, responsive layout, safe rendering, Home navigation, and an inert real-backend workflow |
 
-## Loading, empty, and error behavior
+From the repository root:
 
-- Login and registration buttons are disabled while their request runs.
-- Submission changes to a progress panel with “Submitting...” then “Scanning...”.
-- Stage records determine visible state; stages never present are shown as skipped at completion.
-- Network loss while polling retries; other retrieval errors stop with a message.
-- Backend JSON `message` is preferred, with a frontend fallback.
-- The reports page currently renders an empty array; its empty view is not explained to the user.
+```bash
+node --test backend/test/dashboardData.test.js
+cd backend
+npm run test:dashboard
+```
 
-## Accessibility and usability observations
+Playwright needs its Chromium binary or `DASHBOARD_BROWSER_PATH` pointing to a compatible Chrome. Tests use synthetic fixtures and temporary data; they do not invoke a live sandbox.
 
-Present positive elements include language metadata, viewport metadata, visible labels, native form controls, and text status in addition to animation/color. Remaining issues include alert-based validation, inline event handlers, large inline scripts, no announced live region for progress, limited keyboard/focus management for the account popup, unexplained empty reports, and no formal accessibility or user test.
+## Accessibility and usability
 
-## Test evidence
+Current positive behavior includes native controls, visible labels, text plus color state, explicit loading/failure/unavailable views, responsive tests, reduced-motion support, keyboard-operable history buttons, and retry controls.
 
-No frontend unit, browser integration, or accessibility suite is present. Backend API/auth tests cover the server routes used by the pages, but `npm test` did not start in the 2026-11-03 WSL 1/npm environment. No browser automation was performed during this documentation update.
+Remaining gaps include large inline Home scripts, alert-based validation, incomplete focus/live-region behavior, no audited screen-reader flow, and no formal non-expert user study.
 
-## Security and privacy notes
+## Security and privacy
 
-- Treat displayed backend messages as untrusted text; current code assigns them through `textContent` in submission/login paths.
-- The report list scaffold builds HTML strings and must escape server-supplied values when integrated.
-- Client `.exe` validation is a usability check, not a security boundary.
-- Same-origin backend serving reduces CORS complexity; production still requires HTTPS and secure cookies.
-- Avoid exposing sensitive telemetry or reports to other guest users when history is integrated.
+- Same-origin serving reduces cookie/CORS complexity; production still needs HTTPS and `COOKIE_SECURE=true`.
+- Treat reports as sensitive; guest history is shared by guest scope in the current backend design.
+- Dynamic text must continue to use text nodes rather than HTML interpolation.
+- Browser extension checks are not a security boundary.
+- External-report links and provider output require safe text rendering and data-policy review.
 
 ## Known limitations
 
-- No report-history API call or detailed report view.
-- No stage score, telemetry, evidence, or generated explanation renderer.
-- No route handling beyond static paths.
-- No frontend build, lint, formatting, test, or accessibility tooling.
-- Optional stage availability is inferred from returned results, not a capabilities endpoint.
+- The report stage summary omits `file_type` and `content_analysis`.
+- Content-analysis and LLM results do not have equivalent complete detail renderers.
+- The PE renderer reports limited output for mock/legacy reports.
+- No capabilities endpoint tells the UI which optional stages are enabled.
+- No frontend build/lint/format system or accessibility suite is defined.
 
 ## Next work
 
-1. Connect `GET /api/samples?limit=&offset=` with user/guest scope and safe DOM rendering.
-2. Add a detailed scan view for stage results and clear evidence/status explanations.
-3. Make incomplete and unavailable stages explicit before submission.
-4. Add accessible status announcements, focus management, inline validation, and keyboard testing.
-5. Add browser-level tests for account, submission, polling, failure, and history flows.
+1. Add file-type/content-analysis and LLM detail panels.
+2. Expose backend capabilities so pending/not-run labels can explain why.
+3. Add accessible live announcements, focus management, inline validation, and audit coverage.
+4. Add deletion/retention UX after the backend defines policy and endpoints.
+5. Validate display against real-but-inert integrated reports from each optional service.
 
 ## Related documentation
 

@@ -1,35 +1,25 @@
-# Setup and Operations
+# Sentinel Setup and Operations
 
-## Purpose
+## Supported use
 
-This guide covers the runnable default prototype, optional component configuration, safe operation, and troubleshooting. Commands assume the repository root unless they begin with `cd backend` or `cd ML`.
+These instructions cover local development and inert demonstrations for `dev-branch` as of 2026-11-19.
 
-## Safety before setup
-
-Use only inert fixtures or files you are authorized to analyze. The current branch does not contain or validate the promised sandbox isolation controls. Do not configure `SANDBOX_URL` for real malware until the VM, network boundary, snapshot restoration, sample transfer, and log export have been reviewed and tested independently.
-
-Never commit malware samples, `.env` files, API keys, database credentials, session data, provider tokens, uploaded files, SQLite databases, reputation databases, model artifacts, private datasets, or reports containing sensitive identifiers.
+> **Safety:** Do not execute real malware. The committed dynamic-service source has not established working sample transfer, EVTX export, network isolation, failure-safe reset, cleanup, or host containment. Use files you are authorized to analyze and disposable local data.
 
 ## Prerequisites
 
-### Default web prototype
+| Capability | Required software |
+| --- | --- |
+| Default backend/site | Node.js 22 LTS, npm, Python 3 |
+| Real PE analyzer | Python 3 plus `malware_detection/requirements.txt` |
+| Optional YARA/schema development | `malware_detection/requirements-dev.txt` |
+| Richer Office/archive content analysis | `backend/scripts/requirements-content.txt` |
+| Behavioral ML workflow/service | Root `requirements.txt` (`joblib`, NumPy, scikit-learn) |
+| Optional Groq explanation | Root `requirements.txt` plus `GROQ_API_KEY` |
+| Dynamic-service development | Linux/KVM/QEMU/libvirt, Windows guest, QEMU Guest Agent, Sysmon, and `dynamic_telemetry/requirements.txt` |
+| Browser verification | Backend dev dependencies and a compatible Playwright Chromium/Chrome executable |
 
-- Node.js 22 LTS and npm.
-- Python 3 available as `python3` or configured through `PYTHON_PATH`.
-- A modern browser.
-
-### Real static analyzer
-
-- Python 3.
-- `pefile` from `malware_detection/requirements.txt`.
-- Optional development dependencies from `malware_detection/requirements-dev.txt` for schema/YARA tests.
-
-### Machine learning tools
-
-- `joblib`, `numpy`, and `scikit-learn` from the root `requirements.txt`.
-- A compatible telemetry report, and optional trained `.joblib` artifacts.
-
-The repository does not supply the sandbox hypervisor/guest prerequisites or an LLM provider SDK.
+Use isolated Python virtual environments. Joblib artifacts and uploaded samples are untrusted data; never load or execute artifacts from an unknown source.
 
 ## Default local startup
 
@@ -40,57 +30,70 @@ cp .env.example .env
 npm run dev
 ```
 
-Expected default behavior:
+Open `http://localhost:3000/`. The backend serves `website/` by default, so pages and API share an origin and the HttpOnly session cookie works without separate CORS configuration.
 
-- Site and API listen on `http://localhost:3000`.
-- `website/` is served from the same origin.
-- SQLite is created at the configured `DATABASE_PATH` on first start.
-- Uploads are stored beneath `backend/uploads/` unless overridden.
-- Signature lookup and the mock static analyzer run.
-- Sandbox, behavioral ML, and LLM stages are disabled.
+The default file pipeline is:
 
-Check health:
+```text
+signature → file_type → static_analysis (PE/DOS/unknown)
+                      → content_analysis (every non-PE, including unknown)
+```
+
+`static_analysis` uses `backend/scripts/mock_analyze.py` unless configured otherwise. `file_type` and `content_analysis` use `backend/scripts/content_analyze.py` and Python's standard library by default.
+
+Unknown classifications run both `static_analysis` and `content_analysis`; this is the current predicate behavior, not an exclusive branch.
+
+Safe API checks:
 
 ```bash
 curl http://localhost:3000/api/health
+curl -F "file=@test/fixtures/sample.bin" "http://localhost:3000/api/samples?wait=true"
+curl -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com/"}' \
+  "http://localhost:3000/api/links?wait=true"
+curl "http://localhost:3000/api/samples?limit=20&offset=0"
 ```
 
-Run a safe API demonstration with the inert backend fixture:
+The default fixture and catalog demonstrate routing and persistence, not malicious/benign accuracy.
+
+## File-type and content analysis
+
+The browser exposes a broad supported-extension list, but the backend does not trust the filename. `file_type` uses magic bytes, container structure, and bounded text heuristics. It reports extension mismatch and filename tricks when applicable.
+
+Recognized non-PE formats use `content_analysis`, including:
+
+- Office/OLE/OOXML, RTF, OneNote, and CSV.
+- PDF.
+- PowerShell, batch, VBScript/JScript, WSF/HTA, Python, and shell scripts.
+- C/C++, C#, Go, Rust, and Java source.
+- ZIP, tar, gzip, and optional RAR/7z/ISO inspection.
+- LNK/URL shortcuts, HTML, SVG, and CHM/web content.
+
+Install optional parsers in the backend's Python environment for deeper macro and archive inspection:
 
 ```bash
-curl -F "file=@backend/test/fixtures/sample.bin" \
-  "http://localhost:3000/api/samples?wait=true"
+python -m pip install -r backend/scripts/requirements-content.txt
 ```
 
-The dashboard's browser picker accepts `.exe`; use a known inert PE fixture for UI demonstrations.
+Without optional packages, the analyzer reports reduced coverage; it must not infer safety.
 
-## Accounts and guest use
-
-Accounts are optional by default. Registering signs the new user in. Guest submissions are stored with a null user identity, and guest history queries return guest scans. To disable new registrations:
+Disable both stages only when deliberately testing the legacy fallback path:
 
 ```dotenv
-ALLOW_REGISTRATION=false
+CONTENT_ANALYZER_PATH=
 ```
 
-For HTTPS deployment:
+## Real PE analyzer
 
-```dotenv
-COOKIE_SECURE=true
-```
-
-This flag prevents the session cookie from traveling over plain HTTP. It does not configure TLS; a secure deployment still needs an HTTPS reverse proxy or platform endpoint.
-
-## Real static analyzer
-
-Create an isolated Python environment:
+From the repository root:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r malware_detection/requirements.txt
+python -m pip install -r malware_detection/requirements.txt
 ```
 
-Set the backend environment:
+Configure `backend/.env`:
 
 ```dotenv
 PYTHON_PATH=../.venv/bin/python
@@ -98,83 +101,47 @@ ANALYZER_SCRIPT_PATH=../malware_detection/analyze.py
 ANALYZER_TIMEOUT_MS=15000
 ```
 
-Windows paths may point to `.venv\Scripts\python.exe`. Relative backend paths resolve from `backend/`, not the shell's current directory.
+On Windows, use the virtual environment's `python.exe`. `file_type` routes recognized non-PE uploads away from the PE analyzer. Unknown content still uses the PE fallback and can produce a controlled PE-format stage failure.
 
-Direct analyzer usage:
+Optional offline reputation and trusted YARA sources are configured through the component tools/environment described in [malware_detection/README.md](../malware_detection/README.md). A missing feed or no match is not a benign verdict.
 
-```bash
-python3 malware_detection/analyze.py path/to/inert.exe > report.json
-python3 malware_detection/validate_report.py --require-current report.json
-```
+## Behavioral ML workflow
 
-Optional offline enrichment:
-
-```bash
-python3 malware_detection/analyze.py path/to/inert.exe \
-  --hash-cache path/to/reputation.sqlite \
-  --yara-rules malware_detection/rules/wannacry.yar
-```
-
-The analyzer performs no reputation network lookup. `update_reputation.py` is the separate, deliberate import/download path. Treat third-party rules and feeds as untrusted inputs until their source, license, update time, and coverage are recorded.
-
-## Behavioral ML tools
-
-Install the root Python requirements in an isolated environment:
+Install dependencies in a separate environment:
 
 ```bash
 python3 -m venv .venv-ml
 source .venv-ml/bin/activate
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
-Heuristic CLI analysis:
+Run the complete ML regression suite:
 
 ```bash
-cd ML
-python3 predict.py --file sandbox_example.json
+python -B -m unittest discover -s ML -p "test_*.py" -v
 ```
 
-Local HTTP service:
+[ML/SYNTHETIC_DATA.md](../ML/SYNTHETIC_DATA.md) gives exact generation, export, split, training, validation-threshold, evaluation, and HTTP-service commands. The core service command is:
 
 ```bash
-cd ML
-python3 predict.py --serve --host 127.0.0.1 --port 8000
+python ML/predict.py --serve \
+  --classifier-model models/random_forest.joblib \
+  --anomaly-model models/isolation_forest.joblib \
+  --threshold 0.5
 ```
 
-The backend default `BEHAVIORAL_ML_URL` is `http://127.0.0.1:8000/`, but it calls this service only when `SANDBOX_URL` enables the preceding sandbox stage.
-
-Optional model arguments:
-
-```bash
-python3 predict.py --file sandbox_example.json \
-  --classifier-model random_forest.joblib \
-  --anomaly-model isolation_forest.joblib
-```
-
-No model files are committed. Heuristic output uses `prediction_source: heuristic`; do not describe that score as trained-model probability.
-
-## Optional sandbox integration
-
-Backend configuration:
+Configure a local backend to call the analysis endpoint:
 
 ```dotenv
-SANDBOX_URL=http://127.0.0.1:9000
-SANDBOX_DETONATION_SECONDS=15
-SANDBOX_TIMEOUT_MS=120000
-BEHAVIORAL_ML_URL=http://127.0.0.1:8000/
+BEHAVIORAL_ML_URL=http://127.0.0.1:8000/analyze
 BEHAVIORAL_ML_TIMEOUT_MS=15000
 ```
 
-Expected service contract:
+The backend only adds `behavioral_ml` when `SANDBOX_URL` is also set. Synthetic labels, thresholds, and metrics are development evidence, not real-world detection accuracy. Load only trusted joblib files.
 
-- `POST /detonate` accepts multipart file content and a timeout.
-- Response is JSON with usable telemetry and a parseable execution result.
-- The backend permits only one concurrent detonation because the design assumes one VM.
-- Empty or parse-error telemetry fails the sandbox stage and is not forwarded as benign behavior.
+## Optional LLM and demo threat intelligence
 
-The external service and VM do not exist in this branch. Configuration alone does not create a safe sandbox.
-
-## Optional LLM/threat-intelligence integration
+Install the root Python requirements in the interpreter named by `PYTHON_PATH`, then set:
 
 ```dotenv
 LLM_DIR=../llm-threat-intelligence
@@ -182,105 +149,123 @@ LLM_BRIDGE_PATH=./scripts/llm_bridge.py
 LLM_TIMEOUT_MS=30000
 ```
 
-`LLM_DIR` must contain the external Python component expected by `backend/scripts/llm_bridge.py`. The current branch defines no provider, model, prompt version, credential name, cost control, redaction policy, explanation schema, or MITRE mapping validator. Do not enable external transmission until those decisions and the data policy are documented.
+The stage runs for files and links after earlier applicable stages.
 
-## Database options
+- Without `GROQ_API_KEY`, demo indicator lookup and prompt construction still complete; `explanation_status` is `skipped`.
+- With a key, `llm_analyzer.py` calls Groq model `openai/gpt-oss-20b` with `max_tokens=500`.
+- Provider/network/key errors produce `explanation_status: "error"` and do not discard the prompt or demo intelligence.
 
-### SQLite default
+Never commit the key. Before sending non-synthetic data externally, approve provider retention/training terms, data classes, redaction, and cost controls. The current component has no ATT&CK mapping or evidence-citation schema.
+
+## Dynamic-service source
+
+`dynamic_telemetry/api.py` defines `/health` and `/detonate` using FastAPI, KVM/QEMU/libvirt commands, QEMU Guest Agent calls, and Sysmon EVTX parsing. Its constants, service account, VM name, snapshot name, paths, and example network address are deployment-specific examples.
+
+Do not copy the committed address as a default. A development operator would need to supply and review all of the following outside source:
+
+1. Dedicated Linux virtualization host and hardened Windows guest.
+2. Exact VM/snapshot identity and a proven revert procedure.
+3. A sample-transfer mechanism that does not expose host shares or credentials.
+4. A verified EVTX export mechanism from guest to host.
+5. Network isolation/simulation policy and egress tests.
+6. Authentication, upload limits, resource limits, cleanup, logging, and retention.
+7. Inert end-to-end canary tests proving transfer, execution, telemetry, and reset.
+8. Independent containment review before any real malware.
+
+After those controls exist, configure the backend with the reviewed service base URL:
 
 ```dotenv
-DATABASE_PATH=./data/sentinel.db
+SANDBOX_URL=http://sandbox-host.example:8000
+SANDBOX_DETONATION_SECONDS=15
+SANDBOX_TIMEOUT_MS=120000
 ```
 
-SQLite requires no separate service and is appropriate for a single local backend.
+The backend appends `/detonate` and serializes requests within one Node process. That client lock is not VM isolation or distributed coordination.
 
-### PostgreSQL
+## Environment configuration
 
-```dotenv
-DATABASE_URL=postgres://USER:PASSWORD@HOST:5432/DATABASE
-DATABASE_SSL=true
-DATABASE_POOL_SIZE=5
-WORKER_ID=developer-machine:3000
-```
+Use `backend/.env.example` as the exhaustive template.
 
-Use a separate disposable database for tests through `TEST_DATABASE_URL`. The PostgreSQL test command empties its test tables; never point it at shared or production data. See [Azure database notes](../backend/docs/azure-database.md).
-
-## Configuration reference
-
-| Group | Variables | Operational meaning |
+| Group | Variables | Purpose |
 | --- | --- | --- |
-| Server/site | `PORT`, `WEBSITE_DIR`, `CORS_ORIGINS` | Listener, static site root, and credentialed development origins |
-| Upload | `UPLOAD_DIR`, `MAX_UPLOAD_BYTES` | Local storage and maximum accepted multipart file size |
-| Database | `DATABASE_PATH`, `DATABASE_URL`, `DATABASE_SSL`, `DATABASE_POOL_SIZE` | Persistence backend and connection behavior |
-| Queue | `WORKER_ID`, `JOB_CONCURRENCY`, `WAIT_TIMEOUT_MS` | Host ownership, local parallelism, and synchronous-wait limit |
-| Static analysis | `PYTHON_PATH`, `ANALYZER_SCRIPT_PATH`, `ANALYZER_TIMEOUT_MS` | Python process and analyzer selection |
-| Signatures | `SIGNATURE_CATALOG_PATH`, `SIGNATURE_HASHLIST_PATH` | Curated catalog and optional bulk SHA-256 list |
-| URLs | `MAX_URL_LENGTH` | URL submission length limit |
-| Sandbox | `SANDBOX_URL`, `SANDBOX_DETONATION_SECONDS`, `SANDBOX_TIMEOUT_MS` | Optional detonation stage |
-| Behavioral ML | `BEHAVIORAL_ML_URL`, `BEHAVIORAL_ML_TIMEOUT_MS` | Optional scoring service after sandbox |
-| Threat intelligence | `LLM_DIR`, `LLM_BRIDGE_PATH`, `LLM_TIMEOUT_MS` | Optional external bridge stage |
-| Authentication | `SESSION_TTL_HOURS`, `COOKIE_SECURE`, `ALLOW_REGISTRATION`, `MAX_FAILED_LOGINS` | Session lifetime and account controls |
+| Server/site | `PORT`, `WEBSITE_DIR`, `CORS_ORIGINS` | Listen port, static site, development origins |
+| Database | `DATABASE_URL`, `DATABASE_PATH`, `DATABASE_SSL`, `DATABASE_POOL_SIZE`, `WORKER_ID` | PostgreSQL or SQLite and local job ownership |
+| Upload/queue | `UPLOAD_DIR`, `MAX_UPLOAD_BYTES`, `JOB_CONCURRENCY`, `WAIT_TIMEOUT_MS` | Storage, limits, concurrency, synchronous wait |
+| Python/PE | `PYTHON_PATH`, `ANALYZER_SCRIPT_PATH`, `ANALYZER_TIMEOUT_MS` | PE analyzer subprocess |
+| File/content | `CONTENT_ANALYZER_PATH`, `CONTENT_ANALYZER_TIMEOUT_MS` | Default byte detection/non-PE analysis |
+| Signatures | `SIGNATURE_CATALOG_PATH`, `SIGNATURE_HASHLIST_PATH` | Curated catalog and optional bulk hashes |
+| Sandbox | `SANDBOX_URL`, `SANDBOX_DETONATION_SECONDS`, `SANDBOX_TIMEOUT_MS` | Optional detonation service |
+| Behavioral ML | `BEHAVIORAL_ML_URL`, `BEHAVIORAL_ML_TIMEOUT_MS` | Optional score service after sandbox |
+| LLM | `LLM_DIR`, `LLM_BRIDGE_PATH`, `LLM_TIMEOUT_MS`, `GROQ_API_KEY` | Optional demo intelligence/explanation |
+| Accounts | `SESSION_TTL_HOURS`, `COOKIE_SECURE`, `ALLOW_REGISTRATION`, `MAX_FAILED_LOGINS` | Session and registration controls |
 
-Use `backend/.env.example` as the exhaustive value template. Do not commit the copied `.env`.
+Never commit `.env`, API keys, feeds, uploads, databases, reports containing sensitive data, or model artifacts with unknown provenance.
 
 ## Test commands
 
-```bash
-cd backend
-npm test
-cd ..
-```
+From the repository root unless noted:
 
 ```bash
+python3 -m unittest discover -s tests/documentation -v
+python3 -m unittest discover -s tests/contribution_tracker -v
+python3 -B -m unittest discover -s ML -p "test_*.py" -v
 python3 -m unittest discover -s malware_detection/tests -v
 ```
 
 ```bash
-cd ML
-python3 -m unittest test_report_parser -v
-cd ..
+cd backend
+npm test
+npm run test:dashboard
 ```
 
-```bash
-python3 -m unittest discover -s tests/contribution_tracker -v
-```
+Browser tests require a Playwright Chromium installation or `DASHBOARD_BROWSER_PATH` pointing to compatible Chrome. The browser suite uses synthetic fixtures and a temporary inert backend workflow; it does not verify live detonation.
 
-```bash
-python3 -m unittest discover -s tests/documentation -v
-```
+Fresh results and environment-specific blockers are recorded in [Prototype Status](prototype-status.md#verification-record).
 
 ## Troubleshooting
 
-### npm reports WSL 1 is unsupported
+### `npm` reports unsupported WSL or cannot find Node
 
-The shell is finding a Windows npm shim from WSL 1 rather than a supported Linux Node installation. Use WSL 2, run the backend from Windows PowerShell with a supported Node.js installation, or install Node.js inside a supported Linux environment. This is an environment startup failure, not a Node test assertion failure.
+The shell may be resolving a Windows npm shim from an unsupported WSL environment. Use WSL 2, Windows PowerShell with supported Node.js, or a Linux Node installation. This is a tooling startup failure, not a failed assertion.
 
 ### `ModuleNotFoundError: pefile`
 
-Activate the analyzer virtual environment and run `pip install -r malware_detection/requirements.txt`.
+Activate the PE environment and install `malware_detection/requirements.txt`.
 
-### `ModuleNotFoundError: joblib`
+### `ModuleNotFoundError: joblib`, `numpy`, or `sklearn`
 
-Activate the ML virtual environment and run `pip install -r requirements.txt`.
+Activate the ML environment and install the root `requirements.txt`.
 
-### Static analysis reports `PEFormatError`
+### Optional macro/archive depth is unavailable
 
-The real analyzer received a file that is empty, truncated, not a PE, or otherwise malformed. Verify the input is an inert Windows PE. The stage failure is expected behavior; it should not crash the whole server.
+Install `backend/scripts/requirements-content.txt`. Re-run with an inert fixture and inspect the report's tool/coverage notes.
 
-### A scan completes with skipped stages
+### A PE stage reports a format error
 
-Unset optional components are omitted by design. Check `SANDBOX_URL` and `LLM_DIR`, then compare the active list in `backend/src/pipeline/stages.js`. Static ML will remain absent because it has no registered stage.
+Check the preceding `file_type` result. A recognized non-PE reaches `content_analysis`. Unknown input also reaches the PE analyzer and can fail there safely while its content-analysis result remains separate.
 
-### Sandbox stage reports no telemetry or parse error
+### A scan has no `file_type` or `content_analysis` row
 
-Do not substitute zero counts. Verify the external service copied the sample into the VM, exported the log, and returned the shape expected by `sandboxToMl.js`. Treat this as an integration failure.
+Check whether `CONTENT_ANALYZER_PATH` is empty, the Python stage failed, or the file was routed to PE analysis. A skipped conditional stage creates no result row.
+
+### Sandbox reports no telemetry
+
+Do not substitute zero counts. Verify sample transfer, guest execution, EVTX export, parser output, and response shape. Treat the run as inconclusive/failed.
+
+### LLM explanation is skipped or errored
+
+Inspect `explanation_status` and `explanation_error`. `skipped` normally means no `GROQ_API_KEY`; `error` means the optional call failed. Demo threat intelligence and the prompt may still be available.
+
+### Reports page lacks a content-analysis/LLM detail view
+
+This is a current UI limitation. Home displays summarized content findings; the reports page specializes in PE, signature, sandbox, and behavioral evidence.
 
 ### Login cookie is missing
 
-Serve the site from the backend when possible. For a separate development origin, add that exact origin to `CORS_ORIGINS`, keep `credentials: include`, and leave `COOKIE_SECURE=false` only for local HTTP.
+Prefer serving the site from the backend. For a separate origin, add the exact origin to `CORS_ORIGINS`, use credentialed requests, and leave `COOKIE_SECURE=false` only for local HTTP.
 
 ## Shutdown and cleanup
 
-Stop the backend and optional services with their process controls. Before deleting data, confirm paths in `.env`; uploads and databases may contain user data. This repository provides no deletion endpoint or automated retention job. Prefer a disposable development database and inert upload directory for demonstrations.
+Stop backend and optional services with their process controls. Before deleting anything, resolve the explicit `UPLOAD_DIR`, `DATABASE_PATH`, generated ML output directory, and any sandbox staging directory. They can contain user data or untrusted files.
 
-Do not recursively delete broad directories or a shared PostgreSQL database as a cleanup shortcut.
+The repository supplies no deletion endpoint or retention job. Prefer disposable directories and a local database for demonstrations. Never recursively delete a broad directory or shared database as a cleanup shortcut.

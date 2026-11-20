@@ -1,29 +1,32 @@
-# LLM & Threat Intelligence Status
+# LLM and Threat-Intelligence Status
 
-## Milestones Accomplished
+Status on 2026-11-19: **Partial**.
 
-- Defined the LLM and Threat Intelligence component responsibilities.
-- Created a sample JSON malware-analysis report.
-- Created an LLM prompt-generation prototype.
-- Created a threat-intelligence module for indicators.
-- Connected the threat-intelligence module to the LLM analyzer.
-- Successfully tested the combined prototype.
+## Present
 
-## Current Work
+- Indicator validation for hash, IP, domain, and URL values.
+- Small demonstration-only threat-intelligence map.
+- Evidence-grounded prompt construction from Sentinel report fields.
+- Optional Groq explanation using model `openai/gpt-oss-20b` when `GROQ_API_KEY` is set.
+- Backend JSON bridge and final pipeline-stage integration.
+- Nonfatal explanation states: `generated`, `skipped`, `error`, and `not_generated`.
+- Node tests for filtering/bounds, bridge errors/fallbacks, ordering, and file/link behavior.
 
-- Preparing the component for integration with the team's malware-analysis output.
-- Developing the LLM reporting workflow.
-- Planning future threat-intelligence API integration.
+## Not implemented or verified
 
-## Obstacles / Dependencies
+- MITRE ATT&CK tactic/technique mapping.
+- Sentence-level evidence citations and versioned structured report schema.
+- Production threat-intelligence feeds or feed-update process.
+- Prompt/provider/model quality, hallucination, cost, latency, and mapping evaluation.
+- Complete sensitive-data redaction and provider-retention policy.
+- Prompt-injection defense beyond a grounding instruction.
+- Dedicated frontend explanation/mapping viewer.
+- Live Groq execution in the current documentation verification record.
 
-- Final malware-analysis JSON format must be coordinated with the detection team.
-- Live LLM and threat-intelligence APIs have not yet been connected.
+## Next priorities
 
-## Next Steps
-
-- Adapt the component to the team's final JSON format.
-- Add live LLM API integration.
-- Add external threat-intelligence enrichment.
-- Produce structured results for the frontend.
-- Test integration with the other Sentinel components.
+1. Define cited/versioned output and ATT&CK mapping contracts.
+2. Approve provider privacy, retention, key, and cost controls.
+3. Add adversarial grounding/mapping tests and human review.
+4. Replace or supplement demo intelligence with an approved versioned source.
+5. Add a safe dashboard renderer.

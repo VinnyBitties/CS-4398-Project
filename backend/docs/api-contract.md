@@ -1,9 +1,8 @@
 # Sentinel backend API contract (draft for the dashboard)
 
-Status: **draft v0.3, not yet agreed with frontend.** Everything below is
-implemented and tested on `backend-Dhrubo`; what is still open is listed under
-"Open questions" at the end. Until those are settled, treat field names as
-stable and route names as provisional.
+Status: **current `dev-branch` contract as of 2026-11-19.** The frontend uses
+these routes and fields. Product-policy questions that do not change the current
+wire format remain under "Open questions".
 
 Base URL in development: `http://localhost:3000/api`
 
@@ -55,13 +54,13 @@ Each `results[]` entry:
 | `stage` | Runs for | Status | `report` shape |
 |---|---|---|---|
 | `signature` | files, links | **Live** | `{ matched, checked: "sha256"\|"url", match: { type, name, severity, source } \| null }` |
-| `file_type` | files | **Live** (off if `CONTENT_ANALYZER_PATH` is empty) | What the file really is, from its bytes, not its name: `{ category, format, description, extension, extension_mismatch, expected_extensions[], is_text, size, truncated, warnings[], risk_level, filename, analyzer_version }`. `category` is `executable`, `installer`, `office`, `pdf`, `script`, `source`, `archive`, `shortcut`, `web` or `unknown`; `format` is e.g. `pe`, `elf`, `docx`, `pptx`, `xls`, `pdf`, `powershell`, `cpp`, `zip`. `warnings[]` (same shape as findings below) flags name tricks: `extension_mismatch` (an .exe named .pdf), `double_extension`, `rtlo_filename`. Routes the later stages: PEs (and `unknown` files) go to `static_analysis`, everything else to `content_analysis`. |
-| `static_analysis` | files | **Live** (mock analyzer by default, real one by configuration) | The static analyzer's report, `schema_version` `1.2.0`, defined field by field in `malware_detection/REPORT_CONTRACT.md`. With the default mock, the PE fields are canned values. This is extracted evidence, not a verdict. Skipped (no `results[]` entry) when `file_type` identified the file as something other than a PE. |
-| `content_analysis` | files that are not PEs | **Live** (off if `CONTENT_ANALYZER_PATH` is empty) | `{ analyzer_version, filename, category, format, risk_level: "none"\|"low"\|"medium"\|"high", findings[], indicators: { urls[], domains[], ips[] }, details, tools: { oletools } }`. Each finding is `{ id, severity: "low"\|"medium"\|"high", description, evidence? }`, worst first. Office: macros, auto-run macros, remote templates, external OLE objects, DDE, ActiveX, embedded objects. PDF: auto-run JavaScript, `/Launch`, embedded files, `#`-escaped keywords (looks inside compressed streams). Scripts: download-and-run, encoded/obfuscated commands, Defender tampering, persistence. Source code (`.c/.cpp/.h/.cs/.go/.rs/.java`): process injection, embedded shellcode, keylogging, anti-debugging (static only, never compiled). Archives (ZIP, tar, gzip): every file inside is analyzed (up to 3 levels deep), plus zip-bomb, password, path-traversal and double-extension checks; `details.members[]` holds each member's result. Also `.lnk`/`.url` shortcuts, HTML/SVG/HTA, OneNote, RTF, CSV. `risk_level` is the worst finding's severity: evidence, not a verdict. |
+| `file_type` | files | **Live** (off if `CONTENT_ANALYZER_PATH` is empty) | What the file really is, from its bytes, not its name: `{ category, format, description, extension, extension_mismatch, expected_extensions[], is_text, size, truncated, warnings[], risk_level, filename, analyzer_version }`. `category` is `executable`, `installer`, `office`, `pdf`, `script`, `source`, `archive`, `shortcut`, `web` or `unknown`; `format` is e.g. `pe`, `elf`, `docx`, `pptx`, `xls`, `pdf`, `powershell`, `cpp`, `zip`. `warnings[]` (same shape as findings below) flags name tricks: `extension_mismatch` (an .exe named .pdf), `double_extension`, `rtlo_filename`. PEs go to `static_analysis`; detected non-PE formats go to `content_analysis`; the `unknown` category satisfies both predicates. Unknown classifications run both `static_analysis` and `content_analysis`. |
+| `static_analysis` | files | **Live** (mock analyzer by default, real one by configuration) | The static analyzer's report, `schema_version` `1.2.0`, defined field by field in `malware_detection/REPORT_CONTRACT.md`. With the default mock, the PE fields are canned values. This is extracted evidence, not a verdict. It runs for PE/DOS, unknown-category input, and missing/failed type output; other detected non-PE categories create no row. |
+| `content_analysis` | detected non-PE files, including unknown | **Live** (off if `CONTENT_ANALYZER_PATH` is empty) | `{ analyzer_version, filename, category, format, risk_level: "none"\|"low"\|"medium"\|"high", findings[], indicators: { urls[], domains[], ips[] }, details, tools: { oletools } }`. Each finding is `{ id, severity: "low"\|"medium"\|"high", description, evidence? }`, worst first. Office: macros, auto-run macros, remote templates, external OLE objects, DDE, ActiveX, embedded objects. PDF: auto-run JavaScript, `/Launch`, embedded files, `#`-escaped keywords (looks inside compressed streams). Scripts: download-and-run, encoded/obfuscated commands, Defender tampering, persistence. Source code (`.c/.cpp/.h/.cs/.go/.rs/.java`): process injection, embedded shellcode, keylogging, anti-debugging (static only, never compiled). Archives (ZIP, tar, gzip): every file inside is analyzed (up to 3 levels deep), plus zip-bomb, password, path-traversal and double-extension checks; `details.members[]` holds each member's result. Also `.lnk`/`.url` shortcuts, HTML/SVG/HTA, OneNote, RTF, CSV. `risk_level` is the worst finding's severity: evidence, not a verdict. |
 | `static_ml` | files | Planned | To be defined with ML. |
-| `sandbox` | files | **Live when `SANDBOX_URL` is set** | The sandbox's `/detonate` response as-is: `{ job_id, filename, timeout_seconds, summary: { process_count, network_count, dns_count, file_drops_count, registry_count }, telemetry: { processes[], network[], dns[], file_drops[], registry[] } }`. Links are not detonated yet. |
+| `sandbox` | files | **Configured when `SANDBOX_URL` is set** | The sandbox's `/detonate` response as-is: `{ job_id, filename, timeout_seconds, summary: { process_count, network_count, dns_count, file_drops_count, registry_count }, telemetry: { processes[], network[], dns[], file_drops[], registry[] } }`. Links are not detonated. The committed service source does not prove working sample transfer, EVTX export, or containment. |
 | `behavioral_ml` | files | **Live when `SANDBOX_URL` is set** | The ML service's verdict, `{ malicious, risk_score, risk_level, features, evidence[] }`, plus `input_summary` (the counts that were scored) and `adapter_notes[]` (values the backend had to fill in). |
-| `llm` | files, links | **Live when `LLM_DIR` is set** | `{ threat_intel[], prompt, explanation, explanation_status, indicators[], stages_used[] }`. `indicators[]` is `{ indicator, type: "hash"\|"url"\|"domain"\|"ip" }`; `threat_intel[]` is the component's result for each, `{ indicator, type, status, message }`. `explanation` is `null` and `explanation_status` is `"not_generated"` until the LLM/Threat Intelligence component calls an LLM. `stages_used[]` names the earlier stages whose reports went into the prompt. |
+| `llm` | files, links | **Configured when `LLM_DIR` is set** | `{ threat_intel[], prompt, explanation, explanation_status, explanation_error?, indicators[], stages_used[] }`. `indicators[]` is `{ indicator, type: "hash"\|"url"\|"domain"\|"ip" }`; `threat_intel[]` is the component's demo result for each, `{ indicator, type, status, message }`. `explanation_status` is `"generated"` when the optional Groq call succeeds, `"skipped"` without `GROQ_API_KEY`, `"error"` on provider failure, or `"not_generated"` when the loaded component has no generator. The last three states retain prompt/intelligence output. `stages_used[]` names available earlier reports. No ATT&CK mapping is returned. |
 
 New stages appear as extra `results[]` entries. Nothing else about the sample
 object changes, so a dashboard that renders `results[]` generically picks them
@@ -113,9 +112,9 @@ curl -H "Content-Type: application/json" \
 
 Responds exactly like `POST /samples`, with `submission_type: "link"`.
 
-The backend **does not visit the URL**. Today a link only gets the signature
-stage (is the URL or its domain in the catalog?). Opening the page happens in
-the sandbox stage once that exists.
+The backend **does not visit the URL**. A link gets the signature stage and,
+when `LLM_DIR` is configured, the LLM/demo-intelligence stage. The current
+sandbox stage applies only to files; URL rendering/detonation is not implemented.
 
 ### `GET /samples/{sample_id}`
 

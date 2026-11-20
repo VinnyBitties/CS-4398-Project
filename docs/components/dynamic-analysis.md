@@ -2,115 +2,122 @@
 
 ## Purpose and status
 
-The planned dynamic-analysis component should execute unknown Windows binaries inside an isolated, revertible VM, collect runtime telemetry, and return it for behavioral scoring and evidence. Its current status in this branch is **Stubbed/configurable**.
+The dynamic-analysis component is intended to execute authorized Windows samples inside an isolated, revertible VM, collect runtime telemetry, and return it for behavioral scoring and reporting. Its current status is **Partial** and **not safety-verified**.
 
-The repository contains the backend client, validation, telemetry adapter, pipeline gate, and mock-service tests. It does **not** contain the referenced `dynamic_telemetry/` service, hypervisor configuration, guest image, snapshot/reset automation, sample-transfer logic, Sysmon configuration, log exporter, or real isolation test.
+This branch now contains both the backend client/adapter and `dynamic_telemetry/api.py`, a FastAPI service with KVM/QEMU snapshot commands and Sysmon EVTX parsing. Source presence supersedes the old “service absent” description, but it does not prove working sample transfer, EVTX export, network isolation, live detonation, cleanup, or containment.
 
-## Code that is present
+> **Safety:** Do not execute real malware. Use inert canary files only until the gaps below are fixed and an independent containment review passes.
+
+## Source layout
 
 | Path | Responsibility |
 | --- | --- |
-| `backend/src/stages/sandboxClient.js` | Multipart `/detonate` client, timeout/error mapping, one-at-a-time lock |
-| `backend/src/adapters/sandboxToMl.js` | Response validation, known field translation, ML report construction |
-| `backend/src/pipeline/stages.js` | Configuration gate, stage ordering, dependency on usable telemetry |
-| `backend/test/sandboxStages.test.js` | Mock client, timeout, serialization, adapter, and pipeline tests |
+| `dynamic_telemetry/api.py` | FastAPI health/detonation endpoints, virsh/QEMU Guest Agent calls, snapshot revert, EVTX parser |
+| `dynamic_telemetry/client_example.py` | Environment-specific health/detonation example |
+| `dynamic_telemetry/requirements.txt` | FastAPI/Uvicorn/multipart/EVTX/request dependencies |
+| `dynamic_telemetry/sandbox-api.service` | Example systemd unit |
+| `backend/src/stages/sandboxClient.js` | Multipart client, timeouts/errors, one-at-a-time lock |
+| `backend/src/adapters/sandboxToMl.js` | Response validation and behavioral-ML normalization |
+| `backend/src/pipeline/stages.js` | Optional sandbox/behavioral-ML gates |
+| `backend/test/sandboxStages.test.js` | Mock service/client/adapter/pipeline tests |
 
-## Enablement and expected service
+## Intended service flow
 
-The backend adds `sandbox` and `behavioral_ml` stages only when `SANDBOX_URL` is nonempty.
+1. `POST /detonate` stores the uploaded file under a generated host name.
+2. The service reverts a named libvirt domain to a named snapshot.
+3. QEMU Guest Agent commands start the configured guest path and export the Sysmon operational log.
+4. `python-evtx` parses process, network, DNS, file, and registry event IDs.
+5. The service returns summary counts and event arrays.
+6. A `finally` block attempts another snapshot revert and removes host staging files.
+
+`GET /health` sends QEMU Guest Agent `guest-ping` and returns ready/degraded state.
+
+## Source-inspection gaps
+
+The committed implementation does not currently demonstrate the complete intended flow:
+
+- No code copies the uploaded host sample into `C:\Tools\...` inside the guest.
+- No code exports/copies the guest `sysmon_dump.evtx` into the generated host EVTX path before parsing.
+- The `certutil -decode` guest command has no source/destination arguments and is not a sample-transfer mechanism.
+- Network configuration, authentication, upload limits, resource controls, guest hardening, and host/guest credential boundaries are not defined in the repository.
+- Snapshot revert in `finally` is an intent, not proof of failure-safe recovery; an exception during cleanup can still leave uncertainty.
+- Deployment constants (domain, snapshot, service user, paths, address) are environment-specific.
+
+Until sample transfer and EVTX export are implemented and exercised, a live detonation/telemetry claim is unsupported.
+
+## Backend contract
+
+When `SANDBOX_URL` is nonempty, the backend appends `/detonate` and sends:
+
+- Multipart field `file` containing the stored upload.
+- Form field `timeout` from `SANDBOX_DETONATION_SECONDS`.
+
+Expected output contains `summary` plus `telemetry` arrays for processes, network, DNS, file drops, and registry changes. The adapter accepts known raw/normalized variants and creates the behavioral-ML report.
+
+Empty, malformed, or parse-failed telemetry causes the sandbox stage to fail. It is not scored as zero activity. Remote-thread data can remain uncaptured and is recorded with adapter notes.
+
+## Configuration
+
+Backend example after an environment is independently reviewed:
 
 ```dotenv
-SANDBOX_URL=http://127.0.0.1:9000
+SANDBOX_URL=http://sandbox-host.example:8000
 SANDBOX_DETONATION_SECONDS=15
 SANDBOX_TIMEOUT_MS=120000
-BEHAVIORAL_ML_URL=http://127.0.0.1:8000/
+BEHAVIORAL_ML_URL=http://127.0.0.1:8000/analyze
 BEHAVIORAL_ML_TIMEOUT_MS=15000
 ```
 
-The client appends `/detonate` to the base URL and sends multipart data containing the stored file and requested execution timeout. It expects JSON and maps connection failure, request timeout, non-2xx status, and invalid JSON to stable stage errors.
+Do not copy the committed fixed address or service paths as portable defaults.
 
-Only file submissions apply. URL rendering/detonation is not implemented.
+## Concurrency and isolation
 
-## Concurrency and lifecycle assumption
+The Node client serializes requests within one process because the design assumes one VM. It does not provide distributed locking, authorization, host isolation, network isolation, snapshot correctness, or cleanup proof.
 
-The backend serializes detonation requests because the documented design assumes one VM. That lock prevents overlapping client calls in one Node process; it does not provide VM isolation, snapshot restoration, distributed locking, or cleanup.
+A safe development environment needs at minimum:
 
-A safe external service would need to demonstrate at least:
+1. Dedicated host/guest boundary with no shared credentials or writable host mounts.
+2. Reviewed egress isolation/simulation and prohibited-destination tests.
+3. Verified sample transfer and EVTX export that cannot escape staging paths.
+4. Resource/time limits and service authentication.
+5. Known-state reset checks before and after every inert run, including forced failures.
+6. Patch/tool/snapshot version records and immutable run metadata.
+7. Retention, access, cleanup, and incident procedures.
 
-1. Reject unauthorized/oversized inputs and store them outside shared host paths.
-2. Revert or recreate a known guest state before each run.
-3. Transfer the sample without exposing host mounts or credentials.
-4. Enforce execution time/resource limits.
-5. Isolate or simulate network access according to an approved policy.
-6. Collect process, file, registry, network, DNS, and injection telemetry.
-7. Export logs without allowing the guest to write arbitrary host paths.
-8. Restore the known state and prove cleanup before the next job.
+## Tests and verification boundary
 
-None of these behaviors is evidenced by the code in this branch.
+Backend mock tests cover multipart serialization, timeout/error mapping, non-overlap, adapter normalization, dependency failures, and pipeline behavior. They do not run KVM/QEMU, transfer a sample, collect EVTX, or prove containment.
 
-## Telemetry expectations
-
-The adapter recognizes a sandbox response containing a summary and event arrays. Expected behavioral counts include processes created, files created, registry modifications, network connections, DNS queries, and remote threads injected. The current adapter also maps known producer names such as `process_count`, `files_written`, and `query` into the ML consumer's names.
-
-If the response reports a parse error, lacks telemetry, or has no required event arrays/counts, the sandbox stage fails. It is not converted into a zero-activity report. If remote-thread data is unavailable, the adapter records a zero with a note; that value represents a blind spot, not observed absence.
-
-## Test inventory and observed result
-
-The Node mock tests cover:
-
-- Field-name translation and pass-through of an already compatible report.
-- Rejection of parse-error and no-telemetry responses.
-- Multipart upload and timeout field.
-- HTTP error, unreachable service, and timeout handling.
-- Non-overlapping detonation calls.
-- Pipeline translation and behavioral scoring against mock services.
-- Ensuring failed/empty sandbox output is not scored.
-- Independent behavioral-ML failure and link-stage exclusion.
-
-On 2026-11-03, these tests did not start because the available npm shim reported unsupported WSL 1. No real sandbox or VM test was attempted.
+No live VM test is recorded for 2026-11-19. The verification table in [Prototype Status](../prototype-status.md#verification-record) reports only commands actually run.
 
 ## Safety validation record
 
 | Control | Current evidence | Result |
 | --- | --- | --- |
-| Host isolation | No sandbox implementation | Not verified |
-| Network isolation | No environment configuration | Not verified |
-| Snapshot/reset | No lifecycle implementation | Not verified |
-| Sample transfer | Referenced service absent | Not verified |
-| Resource/time limits | Client requests a timeout only | Partial client control, not verified in guest |
-| Log export integrity | Adapter rejects parse/no telemetry | Consumer validation only |
-| One run at a time | In-process client lock and mock test | Implemented at client boundary; not VM proof |
-
-## Security rules
-
-- Do not run real malware from this branch.
-- Do not treat `SANDBOX_URL` configuration as containment evidence.
-- Keep the service on a dedicated isolated network with no host/shared credentials.
-- Preserve raw telemetry and environment/version metadata for reproducibility, but apply access and retention controls.
-- Record guest OS version, patches, hypervisor, snapshot ID, tools, network mode, timeout, and resource limits for every evaluated run.
-
-## Known limitations
-
-- No runnable service or VM artifacts.
-- No verified schema shared directly by producer and ML consumer.
-- No injected-thread capture evidence.
-- No URL detonation.
-- No safety, reproducibility, or performance results.
-- No malware sample-handling procedure.
+| Service source | FastAPI/KVM/QEMU/Sysmon code committed | Present |
+| Sample transfer | No working host-to-guest copy in source | Not verified |
+| EVTX export | No guest-to-host copy into parsed path | Not verified |
+| Network isolation | No committed network policy/test | Not verified |
+| Snapshot/reset | Revert commands in normal/finally paths | Source present; behavior not verified |
+| Host containment | No independent review or canary evidence | Not verified |
+| One request at a time | In-process Node lock and mock test | Client boundary only |
+| Live telemetry | No recorded inert end-to-end run | Not verified |
 
 ## Next work
 
-1. Add the service/environment implementation or merge its source with a versioned contract.
-2. Write and review a malware-handling and containment procedure before testing.
-3. Prove network isolation and snapshot restoration with inert canary tests.
-4. Agree one telemetry schema and remove translation ambiguity.
-5. Run the sandbox and behavioral-ML integration with inert fixtures and record evidence.
-6. Add observability, artifact retention, cleanup, and failure-recovery procedures.
+1. Implement explicit, bounded sample transfer and EVTX export.
+2. Replace deployment constants with validated configuration and startup checks.
+3. Add authentication, size/resource limits, structured logs, and cleanup evidence.
+4. Prove network isolation and reset with inert canaries and forced failures.
+5. Version the producer/consumer telemetry schema.
+6. Run the full sandbox → adapter → ML path with inert fixtures and preserve evidence.
+7. Obtain independent containment approval before any real malware.
 
 ## Related documentation
 
-- [Machine-learning component](machine-learning.md)
-- [Backend component](backend.md)
+- [Dynamic service README](../../dynamic_telemetry/README.md)
+- [Machine learning](machine-learning.md)
+- [Backend](backend.md)
 - [Architecture](../architecture.md)
 - [Setup and Operations](../setup-and-operations.md)
 - [Prototype Status](../prototype-status.md)

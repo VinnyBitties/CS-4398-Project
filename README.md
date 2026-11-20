@@ -1,45 +1,48 @@
 # Coin-Flip Defense: Sentinel
 
-Sentinel is a CS 4398 malware-analysis research prototype. It accepts a file or URL, records a scan, runs the analysis stages available in the current configuration, and exposes progress and results through a browser dashboard and REST API.
+Sentinel is a CS 4398 malware-analysis research prototype. It accepts files or URLs, records each scan, runs the analysis stages enabled for that submission, and exposes progress and stored evidence through an Express API and browser dashboard.
 
-The project is designed around six analysis stages—signature lookup, static PE analysis, static machine learning, sandbox detonation, behavioral machine learning, and an LLM-generated threat report—but this branch does **not** contain a complete end-to-end implementation of all six. The default runnable path is the backend, dashboard, signature catalog, and mock static analyzer.
+This documentation describes `dev-branch` as of 2026-11-19. Sentinel is not a production antivirus, EDR, or validated malware sandbox.
 
-> **Safety warning:** Sentinel is not a production antivirus, EDR, or validated malware sandbox. Do not execute real malware. Use inert fixtures until the missing sandbox implementation and its host, network, sample-handling, and snapshot controls have been independently validated.
+> **Safety warning:** Do not execute real malware with this repository. Use inert fixtures only. Although `dynamic_telemetry/` now contains sandbox-service source, sample transfer, EVTX export, network isolation, reset behavior, cleanup, and live containment have not been independently verified.
 
-## Current prototype at a glance
+## Current prototype
 
-| Area | Current status | What is available |
+| Area | Status | Current capability |
 | --- | --- | --- |
-| Frontend dashboard | Partial | Login/guest access, file or URL submission, polling, and stage progress; report history is not connected. |
-| Backend API and orchestration | Partial | Accounts, sessions, uploads, URL submissions, SQLite/PostgreSQL storage, job queue, signature lookup, static analyzer runner, and optional stage adapters. |
-| Static malware detection | Implemented | Bounded PE parsing, SHA-256, imports, sections, entropy, strings, resources, optional offline reputation and YARA, and report schema 1.2.0. |
-| Machine learning | Partial | Behavioral feature extraction, heuristic scoring, optional Random Forest/Isolation Forest training and inference; no dataset or trained artifact is included. |
-| Dynamic sandbox | Stubbed/configurable | Backend client, telemetry adapter, and mock integration tests; the sandbox/VM implementation is absent. |
-| LLM threat intelligence | Stubbed/configurable | Bounded evidence/indicator adapter and Python bridge; the external component, provider, model, explanation, and ATT&CK mapper are absent. |
+| Frontend dashboard | Partial | Account or guest access, multi-format upload and URL submission, progress, paged scan history, behavioral summaries, and detailed PE evidence. Content-analysis and LLM reports do not yet have equivalent full viewers. |
+| Backend API and orchestration | Partial | Sessions, uploads, SQLite/PostgreSQL storage, jobs, signatures, byte-based file routing, PE/content analysis, and optional sandbox, behavioral-ML, and LLM stages. Static ML is absent. |
+| Static PE detection | Implemented | Bounded PE metadata, imports, sections, entropy, strings, resources, optional offline reputation and YARA, and report schema 1.2.0. The real analyzer is opt-in. |
+| Non-PE content analysis | Implemented | Detects file content and inspects Office, PDF, scripts, source, archives, shortcuts, and web formats for bounded static evidence. |
+| Behavioral machine learning | Partial | Heuristic scoring plus a reproducible synthetic-data, split, training, threshold, evaluation, artifact-metadata, CLI, and HTTP workflow. No real dataset or trained artifact is committed. |
+| Dynamic analysis | Partial, not safety-verified | FastAPI/KVM/QEMU/Sysmon source and backend integration are present; live detonation, transfer, telemetry export, and containment are unverified. |
+| LLM and threat intelligence | Partial | Demo indicator lookup plus an optional Groq explanation using `openai/gpt-oss-20b`; no MITRE ATT&CK mapping, citations, or production intelligence feed. |
 
-The exact status and evidence for every functional and nonfunctional requirement is in [Prototype Status](docs/prototype-status.md).
+See [Prototype Status](docs/prototype-status.md) for requirement-level evidence and verification results.
 
-## Default analysis flow
+## Default scan flow
 
-1. A user submits a file or URL in the dashboard or API.
-2. The backend stores the submission, creates a database-backed job, and returns a sample record.
-3. The signature stage checks a file SHA-256 or normalized URL/domain against the local catalog.
-4. File submissions run through the configured static analyzer. The default is `backend/scripts/mock_analyze.py`; the real analyzer is opt-in.
-5. Optional sandbox and behavioral-ML stages run only when `SANDBOX_URL` is configured.
-6. The optional threat-intelligence bridge runs only when `LLM_DIR` is configured.
-7. The dashboard polls the sample endpoint and displays each stored stage state. Later stage failure does not erase earlier results.
+For a file submission, the default pipeline is:
 
-Static ML is not currently registered as a backend pipeline stage. The reports page also does not yet load the stored scan history.
+1. `signature` checks the file SHA-256 against the local demonstration catalog.
+2. `file_type` identifies content from bytes rather than trusting the extension.
+3. PE/DOS files use `static_analysis`; recognized non-PE files use `content_analysis`. Unknown classifications run both `static_analysis` and `content_analysis` because they satisfy both current stage predicates.
+4. When `SANDBOX_URL` is configured, `sandbox` runs and its usable telemetry is sent to `behavioral_ml`.
+5. When `LLM_DIR` is configured, `llm` runs last over bounded earlier-stage evidence and indicators.
+
+URL submissions currently use `signature` and, when configured, `llm`; the backend does not fetch submitted URLs. `static_ml` is not registered in the pipeline.
+
+The dashboard polls stored scan state, loads paged history through `GET /api/samples`, and opens a selected result with `sample_id`. A failed optional stage remains visible without erasing earlier evidence.
 
 ## Quick start
 
 ### Prerequisites
 
-- Node.js 22 LTS and npm. The backend documentation records 22 LTS as the tested line.
-- Python 3 for the default mock analyzer.
-- Optional Python dependencies for the real analyzer or ML tools; see [Setup and Operations](docs/setup-and-operations.md).
+- Node.js 22 LTS and npm.
+- Python 3 for the default file-type/content analyzer and mock PE analyzer.
+- Optional isolated Python environments for PE analysis, ML, LLM, or dynamic-service dependencies.
 
-### Run the default prototype
+### Run the default local prototype
 
 ```bash
 cd backend
@@ -48,9 +51,9 @@ cp .env.example .env
 npm run dev
 ```
 
-Open `http://localhost:3000/`. The backend serves `website/` from the same origin so the session cookie works without extra CORS setup.
+Open `http://localhost:3000/`. The backend serves `website/` from the same origin, so the session cookie works without separate CORS configuration.
 
-API smoke checks:
+Safe smoke checks:
 
 ```bash
 curl http://localhost:3000/api/health
@@ -58,60 +61,75 @@ curl -F "file=@test/fixtures/sample.bin" "http://localhost:3000/api/samples?wait
 curl -H "Content-Type: application/json" \
   -d '{"url":"http://malware.wicar.org/"}' \
   "http://localhost:3000/api/links?wait=true"
-curl http://localhost:3000/api/samples
+curl "http://localhost:3000/api/samples?limit=20&offset=0"
 ```
 
-The committed catalog uses safe antivirus test indicators. A catalog match is a pipeline demonstration, not evidence that production threat intelligence is configured.
+The default file path uses `backend/scripts/mock_analyze.py` for PE-shaped output and `backend/scripts/content_analyze.py` for file identification and non-PE evidence. Catalog matches and content findings demonstrate orchestration; they are not production threat verdicts.
 
-### Use the real static analyzer
+## Optional analysis paths
 
-Install its dependency and point the backend at the script:
+### Real PE analyzer
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r malware_detection/requirements.txt
+python -m pip install -r malware_detection/requirements.txt
 ```
 
-Set these values in `backend/.env`:
+In `backend/.env`:
 
 ```dotenv
 PYTHON_PATH=../.venv/bin/python
 ANALYZER_SCRIPT_PATH=../malware_detection/analyze.py
 ```
 
-On Windows, use the virtual environment's `python.exe` path. The real analyzer rejects non-PE input; that failure is recorded on the `static_analysis` stage without discarding other stage results.
+The `file_type` stage routes recognized non-PE files to `content_analysis`, while the PE analyzer is invoked for PE/DOS or unknown fallback input. Unknown classifications run both `static_analysis` and `content_analysis`. Windows users should set `PYTHON_PATH` to the virtual environment's `python.exe`.
 
-## Tests and verification
+### Richer content analysis
 
-Repository test inventory is broader than the tests observed in the documentation environment. On 2026-11-03:
+The default content analyzer uses the Python standard library. Optional macro and archive parsers add deeper coverage:
 
-- `python3 -m unittest discover -s tests/contribution_tracker -v`: **30 tests passed**.
-- `cd backend && npm test`: tests did not start because the available npm shim reported unsupported WSL 1.
-- Malware-detection tests: did not import because `pefile` was not installed.
-- ML tests: did not import because `joblib` was not installed.
+```bash
+python -m pip install -r backend/scripts/requirements-content.txt
+```
 
-These are environment-specific observations, not claims that the blocked suites contain failing assertions. See [Prototype Status](docs/prototype-status.md#verification-record) for the complete record and [Setup and Operations](docs/setup-and-operations.md#troubleshooting) for fixes.
+### Behavioral ML
+
+[ML/SYNTHETIC_DATA.md](ML/SYNTHETIC_DATA.md) documents the reproducible synthetic workflow and `ML/predict.py --serve`. Generated labels and metrics are synthetic development evidence, not real-world detection accuracy.
+
+### LLM explanation
+
+Set `LLM_DIR=../llm-threat-intelligence` to enable the local bridge. Without `GROQ_API_KEY`, the stage still returns demo threat intelligence and the evidence prompt with `explanation_status: "skipped"`. With a key, the component calls Groq model `openai/gpt-oss-20b`; provider errors are recorded as an optional explanation error rather than failing the whole stage.
+
+### Dynamic service
+
+`dynamic_telemetry/api.py` is an environment-specific FastAPI/KVM/QEMU prototype. Do not point the backend at it for real malware until the transfer/export gaps and containment controls in [Dynamic Analysis](docs/components/dynamic-analysis.md) have been independently resolved and tested.
+
+## Verification
+
+The repository includes documentation integrity, contribution-tracker, backend, dashboard-browser, ML, and malware-detection suites. Fresh results and exact blockers for this snapshot are maintained in [Prototype Status](docs/prototype-status.md#verification-record). A source file or passing mock test is not evidence that a live sandbox or external provider was exercised.
 
 ## Repository map
 
 ```text
-backend/             Express API, persistence, queue, pipeline, auth, adapters
-malware_detection/   Static PE evidence, reputation, YARA, schema and tools
-ML/                  Behavioral parsing, training, inference and evaluation
-website/             Login and analyst dashboard pages
-docs/                Project, architecture, status and operational documentation
-scripts/             Contribution tracker and documentation utilities
-tests/               Project automation and documentation integrity tests
+backend/                  Express API, persistence, queue, pipeline, auth, adapters
+malware_detection/        Static PE evidence, reputation, YARA, schema and tools
+ML/                       Behavioral data, training, inference and evaluation workflow
+dynamic_telemetry/        Environment-specific KVM/QEMU/Sysmon service prototype
+llm-threat-intelligence/  Demo intelligence and optional Groq explanation
+website/                  Login, scan center, history, and report views
+docs/                     Project, architecture, status, component and operations docs
+scripts/                  Contribution tracker and documentation-form generator
+tests/                    Project automation and documentation integrity tests
 ```
 
 ## Documentation
 
-- [Project Overview](docs/project-overview.md) — purpose, scope, requirements, team responsibilities, and current-version summary.
-- [Architecture](docs/architecture.md) — component boundaries, data flow, persistence, and stage behavior.
-- [Setup and Operations](docs/setup-and-operations.md) — installation, configuration, startup, safety, and troubleshooting.
-- [Prototype Status](docs/prototype-status.md) — component maturity, requirement traceability, verification, risks, and deferred work.
-- [Documentation Index](docs/documentation-index.md) — authoritative sources and Word-form mapping.
+- [Project Overview](docs/project-overview.md) — baseline, current scope, requirements, stack, and responsibilities.
+- [Architecture](docs/architecture.md) — components, routing, persistence, optional services, and failure behavior.
+- [Setup and Operations](docs/setup-and-operations.md) — installation, configuration, startup, testing, safety, and troubleshooting.
+- [Prototype Status](docs/prototype-status.md) — maturity, requirement traceability, verification, risks, and deferred work.
+- [Documentation Index](docs/documentation-index.md) — authoritative sources and Word-record mapping.
 - [Frontend](docs/components/frontend.md)
 - [Backend](docs/components/backend.md)
 - [Malware Detection](docs/components/malware-detection.md)
@@ -119,18 +137,10 @@ tests/               Project automation and documentation integrity tests
 - [Dynamic Analysis](docs/components/dynamic-analysis.md)
 - [LLM and Threat Intelligence](docs/components/llm-threat-intelligence.md)
 
-Narrow authoritative contracts remain in [the backend API contract](backend/docs/api-contract.md) and [the static analyzer report contract](malware_detection/REPORT_CONTRACT.md).
+Exact REST fields remain authoritative in the [backend API contract](backend/docs/api-contract.md); exact PE report semantics remain authoritative in the [static analyzer report contract](malware_detection/REPORT_CONTRACT.md).
 
-## Prototype limitations
+## Scope and limitations
 
-- No real sandbox implementation or validated containment environment is included.
-- No static-ML backend stage exists.
-- No dataset, trained model, benchmark output, or held-out-family result is included.
-- No LLM provider, model invocation, explanation, or MITRE ATT&CK mapping implementation is included.
-- The dashboard reports page is a placeholder and has no detailed result viewer.
-- The default analyzer is a mock; enable the real analyzer explicitly.
-- Uploaded files and scan records need a documented retention/deletion policy before use beyond a local demonstration.
+Sentinel is a capstone research and demonstration system. Real-time antivirus/EDR agents, kernel drivers, automatic remediation, memory forensics, network IDS, a production malware sandbox, and measured real-world detection efficacy remain out of scope for this snapshot.
 
-## Scope
-
-Sentinel is a capstone research and demonstration system. A real-time antivirus agent, EDR sensor, kernel driver, automated remediation system, memory-forensics platform, network IDS, and cross-platform executable scanner remain out of scope.
+Uploaded files and scan records also need approved retention, deletion, access, and backup policies before use beyond a disposable local demonstration.

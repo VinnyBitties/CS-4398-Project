@@ -2,135 +2,140 @@
 
 ## Reporting basis
 
-This record describes `dev-branch` on 2026-11-03. It uses source, configuration, schemas, test inventory, and commands observed during this documentation update. Historical test counts remain historical unless rerun.
+This record describes `dev-branch` on 2026-11-19. Source, executable configuration, schemas, current test inventory, and commands run during this update take precedence over historical prose.
 
 ### Status vocabulary
 
 - **Implemented:** code is present and has a concrete execution path.
-- **Integrated:** producer and consumer code/contracts are present in this branch.
-- **Partial:** meaningful code exists, but required behavior is incomplete.
-- **Stubbed/configurable:** an adapter or placeholder exists but needs an unavailable component or configuration.
+- **Integrated:** producer and consumer code/contracts are present and exercised at their boundary.
+- **Partial:** meaningful implementation exists, but required behavior or evidence is incomplete.
+- **Stubbed/configurable:** an adapter or placeholder exists and needs unavailable implementation/configuration.
 - **Planned/not present:** required implementation is absent.
-- **Not verified:** code or a historical claim exists, but it was not exercised successfully in the current environment.
+- **Not verified:** source or a historical claim exists, but current operational evidence is absent.
 
 ## Component maturity
 
 | Component | Status | Evidence of current capability | Primary gap |
 | --- | --- | --- | --- |
-| Frontend dashboard | Partial | Login/guest flow, upload/URL submission, polling, stage progress | Reports page does not call history API or render detailed results |
-| Backend API and orchestration | Partial | Express API, auth, SQLite/PostgreSQL, queue, signature/static stages, optional adapters | Static ML absent; external stages unavailable by default |
-| Static malware detection and PE evidence | Implemented | Analyzer, schema 1.2.0, PE evidence, optional reputation/YARA | Not the backend default; current test environment lacks `pefile` |
-| Behavioral feature extraction and machine learning | Partial | Parser, heuristic, model training/inference/evaluation tools | No dataset, trained artifact, static model, or evidenced metrics |
-| Dynamic sandbox integration | Stubbed/configurable | Backend client, serialization, telemetry adapter, mock tests | Sandbox service, VM, collection, isolation, and reset absent |
-| LLM and threat-intelligence integration | Stubbed/configurable | Bounded input/indicator adapter and Python bridge | External component, provider/model, explanation, and ATT&CK mapping absent |
+| Frontend dashboard | Partial | Multi-format submission, auth/guest flow, polling, paged history, behavioral summaries, detailed PE evidence, Node/Playwright tests | Content-analysis and LLM details are incomplete; accessibility/user evaluation absent |
+| Backend API and orchestration | Partial | Express API, sessions, SQLite/PostgreSQL, jobs, signature, file routing, PE/content analysis, optional service gates | Static ML absent; optional services require separate verified environments |
+| Static malware detection and PE evidence | Implemented | Analyzer, schema 1.2.0, bounded PE evidence, optional reputation/YARA | Opt-in behind mock default; current verification recorded below |
+| Behavioral feature extraction and machine learning | Partial | Parser, heuristic, synthetic generation/export/split/training/threshold/evaluation, CLI/HTTP, artifact metadata, tests | No real dataset, committed model, static classifier, or held-out-family result |
+| Dynamic sandbox integration | Partial | Backend client/adapter plus FastAPI/KVM/QEMU/Sysmon service source | Sample transfer, EVTX export, containment, cleanup, and live detonation not verified |
+| LLM and threat-intelligence integration | Partial | Bounded evidence, demo indicator analysis, optional Groq `openai/gpt-oss-20b` explanation, bridge tests | No ATT&CK mapping, citations, production feed, or provider evaluation |
 
 ## Functional requirements
 
 | ID | Requirement | Status | Evidence | Gap or qualification |
 | --- | --- | --- | --- | --- |
-| FR01 | Accept executable files through web upload or API. | Implemented | `website/dashboard/home.html`, `website/api.js`, `backend/src/routes/samples.js` | Browser checks `.exe`; backend accepts upload then analysis validates PE format. |
-| FR02 | Query file hashes against a known signature database. | Partial | Backend catalog and optional bulk list; analyzer cache/YARA modules | Committed catalog uses safe test indicators; no production feed selected. |
-| FR03 | Compute a static ML malicious-probability score. | Planned/not present | PE extraction is a prerequisite | No static feature model, artifact, dataset, training path, or `static_ml` pipeline stage. |
-| FR04 | Detonate unknown binaries in an isolated sandbox. | Stubbed/configurable | Sandbox HTTP client and mocked pipeline tests | Sandbox implementation and safety evidence are absent. |
-| FR05 | Compute a behavioral ML risk score from runtime activity. | Stubbed/configurable | Parser/scorer/service and sandbox-to-ML adapter | Requires absent sandbox; no trained model artifact supplied. |
-| FR06 | Generate an LLM report mapped to MITRE ATT&CK tactics. | Stubbed/configurable | Evidence adapter, bridge, ordering tests | External component, LLM invocation, explanation, and mapping absent. |
-| FR07 | Display scores, telemetry, and reports in one dashboard. | Partial | Stage polling and progress labels | Report history/detail view is not integrated. |
-| FR08 | Log scan history for benchmarking and validation. | Implemented | Samples/jobs/results tables and paged API | No history export or benchmark workflow consumes it. |
+| FR01 | Accept files through web upload or API. | Implemented | `website/dashboard/home.html`, `website/api.js`, `backend/src/routes/samples.js` | Browser list is a convenience; `file_type` byte detection is authoritative. |
+| FR02 | Query file hashes against a known signature database. | Partial | Backend catalog/bulk list; analyzer cache/YARA modules | Default catalog is safe demonstration data; no production feed selected. |
+| FR03 | Compute a static ML malicious-probability score. | Planned/not present | PE report is available as a possible future input | No static features/model/data/artifact or `static_ml` stage; behavioral ML is separate. |
+| FR04 | Detonate unknown binaries in an isolated sandbox. | Partial | Client, pipeline stage, `dynamic_telemetry/api.py`, mock tests | Transfer, EVTX export, live execution, reset, network isolation, and containment unverified. |
+| FR05 | Compute a behavioral ML risk score from runtime activity. | Partial | Parser, heuristic/models, synthetic end-to-end test, sandbox adapter | No real artifact or dataset; live input depends on the unverified sandbox. |
+| FR06 | Generate an LLM report mapped to MITRE ATT&CK tactics. | Partial | Evidence adapter, demo intelligence, bridge, optional Groq explanation | No ATT&CK mapping, cited claims, production feed, or provider evaluation. |
+| FR07 | Display scores, telemetry, and reports in one dashboard. | Partial | Paged history, stage state, behavioral summary, signature state, detailed PE viewer | `file_type`, `content_analysis`, and LLM lack equivalent complete report views. |
+| FR08 | Log historical scan results for benchmarking and validation. | Implemented | Samples/jobs/results persistence, account scoping, paged API and history UI | No benchmark/export workflow consumes the history. |
 
 ## Nonfunctional requirements
 
 | ID | Requirement | Status | Evidence | Gap or qualification |
 | --- | --- | --- | --- | --- |
-| NFR Safety | Isolate sandbox network/host and restore state. | Planned/not present | Only client behavior and mocks are present | No real containment, sample handling, or reset test. |
-| NFR Explainability | Report feature importance and evidence. | Partial | PE facts, heuristic evidence, bounded LLM input | No trained feature importance or cited generated explanation. |
-| NFR Usability | Make the dashboard understandable to non-experts. | Partial | Plain-language progress states | No completed report view, accessibility audit, or user study. |
-| NFR Performance | Return static results in interactive demo time. | Not verified | Configured timeouts and queue limits | No numeric target, benchmark, or load test. |
-| NFR Maintainability | Keep a modular Git-based architecture. | Implemented | Separate modules, contracts, schemas, and tests | Optional source trees absent; some telemetry translation remains. |
+| NFR Safety | Isolate sandbox network/host and restore state. | Not verified | Snapshot/service source exists | No verified transfer, network policy, failure-safe reset, cleanup, or containment. |
+| NFR Explainability | Report feature importance and connect explanations to evidence. | Partial | PE facts, heuristic evidence, bounded prompt, optional prose | No trained-model importance or sentence-level citations. |
+| NFR Usability | Make the dashboard understandable to non-experts. | Partial | Explicit loading/failure/unavailable states, responsive browser coverage | No accessibility audit or user study; not every stage has a detail renderer. |
+| NFR Performance | Return static results in interactive demo time. | Not verified | Timeouts, queue concurrency, bounded static reads | No numeric target, latency benchmark, or load test. |
+| NFR Maintainability | Keep a modular Git-based architecture. | Implemented | Separate components/contracts, evidence record, documentation checks, unit/integration tests | Cross-team schemas and deployment definitions still need consolidation. |
 
-## Implemented default demonstration
+## Default runnable demonstration
 
-With no optional environment variables, the backend can:
+With optional service variables empty, the backend can:
 
-1. Serve the static login/dashboard pages.
-2. Register, log in, log out, or operate as a guest.
-3. Accept a file or URL and persist the submission.
-4. Queue a scan and expose status by polling.
+1. Serve account and dashboard pages.
+2. Register/login/logout or operate as a guest.
+3. Accept files or URLs and persist scoped scans.
+4. Queue jobs and expose status/history.
 5. Check the safe local signature catalog.
-6. Run the mock analyzer for files.
-7. Store stage results and return paged history through the API.
+6. Identify file content from bytes.
+7. Run mock PE analysis for PE/DOS or unknown input and content analysis for every detected non-PE format. Unknown classifications run both `static_analysis` and `content_analysis`.
+8. Render history, stage state, behavioral availability, and PE evidence when available.
 
-This demonstrates orchestration, not full malware detection efficacy.
+This demonstrates orchestration and evidence handling, not detection efficacy.
 
 ## Integration state
 
-| Integration | Producer available | Consumer available | Real end-to-end evidence | State |
+| Integration | Producer | Consumer | Current evidence | State |
 | --- | --- | --- | --- | --- |
-| Dashboard → backend API | Yes | Yes | Source-connected; Node suite not rerun | Integrated |
-| Backend → mock analyzer | Yes | Yes | Default code path | Integrated |
-| Backend → real analyzer | Yes | Yes | Contract and conditional tests; blocked locally by dependency | Integrated, not verified here |
-| Real analyzer → static ML | PE report only | No static model/stage | No | Planned/not present |
-| Backend → sandbox | Client only | No service in branch | No | Stubbed/configurable |
-| Sandbox → behavioral ML | Adapter and ML service | Sandbox absent | Mocked only | Stubbed/configurable |
-| Pipeline → threat intelligence | Adapter/bridge | External component absent | Mocked only | Stubbed/configurable |
-| Backend history → reports page | API yes | UI no | No | Partial |
+| Dashboard → backend API | Browser modules | Express routes | Source plus Node/Playwright tests | Integrated |
+| Backend → file/content analyzer | Python standard-library script | Pipeline | Routing/content tests | Integrated |
+| Backend → mock PE analyzer | Mock script | Pipeline/dashboard | Default inert path | Integrated |
+| Backend → real PE analyzer | PE analyzer | Pipeline/PE viewer | Versioned contract and tests; environment result below | Integrated; current execution may be dependency-limited |
+| Real PE analyzer → static ML | PE report only | No static model/stage | None | Planned/not present |
+| Backend → dynamic service | Client | FastAPI source | Mock boundary tests; no live transfer/export evidence | Partial / Not verified live |
+| Dynamic service → behavioral ML | Telemetry/adapter | ML HTTP service | Mock backend tests plus synthetic ML end-to-end test | Partial; no live sandbox evidence |
+| Pipeline → threat intelligence | Adapter/bridge | Committed component | Bridge tests, demo lookup, optional provider call | Partial; live provider not verified |
+| Backend history → reports page | Paged routes | Reports UI | Node/Playwright tests | Integrated |
 
 ## Verification record
 
-### Observed on 2026-11-03
+The normalized [evidence record](documentation-evidence.json) contains the exact results from this update. A blocked command is not a passing component result, and test inventory is not substituted for execution.
 
-| ID | Command | Result | Interpretation |
+| ID | Command | Current record | Interpretation |
 | --- | --- | --- | --- |
-| DOC-VER-001 | `python3 -m unittest discover -s tests/contribution_tracker -v` | 30 tests ran and passed. | Observed passing result. |
-| DOC-VER-002 | `cd backend && npm test` | Tests did not start; the available npm shim reported WSL 1 is unsupported and could not determine the Node.js installation directory. | Environment/tooling block; no backend assertions ran. |
-| DOC-VER-003 | `python3 -m unittest discover -s malware_detection/tests -v` | Six test modules failed to import because pefile is not installed; no assertions ran. | Dependency block; no analyzer assertions ran. |
-| DOC-VER-004 | `cd ML && python3 -m unittest test_report_parser -v` | The test module failed to import because joblib is not installed; no assertions ran. | Dependency block; no ML assertions ran. |
+| DOC-VER-000 | `python3 -m unittest discover -s tests/documentation -v` | The pre-update documentation suite ran 23 tests and passed; this established that the old checks did not detect the November implementation drift. | Baseline only. |
+| DOC-VER-001 | `python3 -m unittest discover -s tests/contribution_tracker -v` | Ran 30 tests; all passed. | Project automation only; not product analysis. |
+| DOC-VER-002 | `cd backend && npm test` | Exited 1 before Node tests ran: npm reported 'WSL 1 is not supported. Please upgrade to WSL 2 or above.' and 'Could not determine Node.js install directory'. | Blocked by this platform; no Node assertions ran. |
+| DOC-VER-003 | `python3 -m unittest discover -s malware_detection/tests -v` | Discovered six test modules; all six failed to import because pefile is not installed (ModuleNotFoundError: No module named 'pefile'); no assertions ran. | Blocked by a required dependency. |
+| DOC-VER-004 | `python3 -B -m unittest discover -s ML -p "test_*.py" -v` | Ran 9 discovered test entries: four synthetic-report tests passed, four modules failed to import because numpy or joblib is not installed, and the end-to-end test failed when split_dataset.py could not import numpy. | Partially executed and dependency-blocked; no model-performance claim. |
+| DOC-VER-005 | `cd backend && npm run test:dashboard` | Exited 1 before Playwright ran: npm reported 'WSL 1 is not supported. Please upgrade to WSL 2 or above.' and 'Could not determine Node.js install directory'; browser availability was not reached. | Blocked by Node/npm platform detection before browser validation. |
+| DOC-VER-006 | `python3 -m unittest discover -s tests/documentation -v && python3 scripts/update_documentation_forms.py --source-root . --output-dir . --check` | Ran 33 documentation tests; all passed, and generator check validated all eight Word forms. | Content/structure validation; visual Office layout still needs a Word-compatible renderer. |
 
-### Repository test inventory
+## Test inventory
 
-- Backend: eight `.test.js` files covering API, auth, queue, catalog, HTTP runner, sandbox/ML integration, LLM stage, and real-analyzer boundary.
+- Backend: top-level Node tests for routes, auth, persistence, jobs, signatures, file/content routing, HTTP stages, sandbox/ML, LLM, dashboard data, and PE boundary behavior.
+- Dashboard: seven Node data-model tests and eight Playwright browser/inert-backend tests.
 - Malware detection: six Python modules covering analyzer behavior, contract, extraction, reputation, YARA, and consumers.
-- ML: fifteen tests in `ML/test_report_parser.py`.
-- Frontend: no dedicated unit or browser-automation suite.
-- Documentation: integrity tests validate the evidence record, local links, Word structure, and cross-format status consistency.
+- ML: six modules with 39 tests covering parsing, generation, export, splitting, training, thresholds, metadata, and end-to-end serving.
+- Documentation: evidence, Markdown links/current-state, Office structure/content, and cross-format checks.
+- Contribution tracker: Git/issue automation tests, separate from product threat intelligence.
 
-Do not copy historical counts into a current-results table without rerunning the corresponding command.
+No mock, synthetic, or unit test replaces a live sandbox containment review or live provider evaluation.
 
 ## Open risks
 
 | ID | Risk | Impact | Response |
 | --- | --- | --- | --- |
-| RISK-001 | Sandbox containment is absent and unverified. | Critical if real malware is executed. | Use inert fixtures until isolation, reset, and handling are independently validated. |
-| RISK-002 | Static ML is absent and dynamic/LLM components are optional or missing. | No complete layered pipeline from this branch. | Demonstrate the default path honestly and track integrations separately. |
-| RISK-003 | Dataset/model provenance and results are absent. | Accuracy, leakage, licensing, and generalization cannot be assessed. | Add dataset/model cards, exact splits, thresholds, and reproduction commands. |
-| RISK-004 | Uploads, telemetry, URLs, and records may be sensitive. | Local or external disclosure. | Define retention, access, deletion, redaction, and external-transmission policies. |
-| RISK-005 | Several suites were blocked in the documentation environment. | Current confidence is lower than historical prose may imply. | Re-run under supported Node/WSL and isolated Python environments. |
+| RISK-001 | Sandbox source can be mistaken for proven containment. | Critical if real malware is executed. | Use inert fixtures until transfer, export, isolation, reset, cleanup, and handling are independently validated. |
+| RISK-002 | Static ML is absent; optional stages are environment-dependent. | No verified default six-layer pipeline. | Demonstrate the default route honestly and track optional integrations separately. |
+| RISK-003 | Synthetic workflow can be mistaken for real efficacy. | Unsupported accuracy/generalization claims. | Label generated metrics synthetic; add real dataset/model cards, family grouping, thresholds, and reproducible results. |
+| RISK-004 | Uploads, telemetry, URLs, indicators, hashes, and accounts may be sensitive. | Local or external disclosure. | Define retention, deletion, access, redaction, and provider-data policies. |
+| RISK-005 | Verification may be limited by dependencies, browsers, or unavailable services. | Source presence may be reported as exercised behavior. | Record exact commands and blockers; separate unit/mock results from live checks. |
 
 ## Known limitations and technical debt
 
-- The root frontend uses large inline scripts and alert-style validation.
-- Reports history is an empty in-memory scaffold.
-- Guest scanning is enabled by default.
-- The backend has no upload or scan deletion endpoint.
-- The queue is intentionally single-process; PostgreSQL does not turn it into a distributed worker fleet.
-- The signature catalog is demonstration-only.
-- The real analyzer is not the backend default.
-- A telemetry adapter bridges current sandbox/ML schema differences.
-- ML heuristic scores are not calibrated probabilities.
-- No model card, dataset card, benchmark table, held-out-family experiment, or trained artifact is present.
-- No LLM data policy, provider/model selection, prompt artifact, citations, or mapping review exists.
-- No deployment, TLS, monitoring, backup, disaster recovery, or production secrets-management guide exists.
+- Guest scanning remains enabled by default.
+- No upload/scan deletion endpoint or retention job exists.
+- The queue is single-process; PostgreSQL does not create a distributed worker fleet.
+- The default PE analyzer is a mock.
+- Static ML is absent.
+- Report history does not fully render every current stage.
+- Dynamic constants and service configuration are environment-specific; live safety is unverified.
+- Remote-thread telemetry can remain an adapter blind spot.
+- No real dataset, model card, trained artifact, held-out-family experiment, or efficacy result is committed.
+- LLM output has no citations, ATT&CK mapper, prompt version, production feed, or evaluation.
+- No production deployment, TLS, monitoring, backup, disaster recovery, artifact storage, or secrets-management design is supplied.
 
 ## Deferred work by priority
 
-1. Validate and document sandbox safety before any real detonation.
-2. Select and document a licensed dataset; build the missing static ML path.
-3. Produce and evaluate versioned behavioral model artifacts.
-4. Complete the reports page and detailed result rendering.
-5. Supply and validate the threat-intelligence/LLM component with evidence citations and ATT&CK review.
-6. Add retention/deletion controls and deployment security guidance.
-7. Run all suites in supported environments and record exact results.
-8. Execute the layered and held-out-family evaluation with reproducible commands.
+1. Resolve and test sandbox sample transfer and EVTX export with inert canaries.
+2. Independently validate containment, network policy, reset, cleanup, and handling before real detonation.
+3. Create the missing static-ML pipeline and versioned contract.
+4. Establish real dataset/model cards, family-aware splits, trained artifacts, and reproducible evaluation.
+5. Add complete content-analysis and LLM report views plus accessibility/user evaluation.
+6. Define cited, versioned LLM/ATT&CK output and provider privacy/cost policy.
+7. Add retention/deletion controls and production deployment security.
+8. Execute the layered and held-out-family research evaluation.
 
 ## Source of truth
 
-The normalized [documentation evidence record](documentation-evidence.json) carries paths and status data used for this package. Detailed component behavior is documented in [the component index](documentation-index.md), while narrow API and report schemas remain authoritative in their owning directories.
+The [documentation evidence record](documentation-evidence.json) carries machine-readable status, paths, verification, and risks. [Documentation Index](documentation-index.md) maps audiences to authoritative guides. Exact API and PE report fields remain authoritative in their owning component contracts.

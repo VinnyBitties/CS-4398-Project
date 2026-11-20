@@ -2,29 +2,34 @@
 
 ## Purpose and status
 
-The `ML/` component validates behavioral reports, builds a nine-feature vector, produces a heuristic risk result, optionally trains/loads classifier and anomaly models, exposes CLI/HTTP inference, and evaluates labeled records. Its status is **Partial** because no dataset, model artifact, model card, or evaluation result is included, and the code is behavioral rather than the required static-PE classifier.
+`ML/` validates behavioral reports, builds a fixed nine-feature vector, produces a heuristic risk result, trains optional classifier/anomaly models, selects a validation threshold, serves CLI/HTTP inference, and evaluates labeled records. Its status is **Partial**.
+
+The repository now has a reproducible end-to-end synthetic workflow, but it has no real dataset, committed trained artifact, model card, held-out-family result, or real-world performance evidence. The code is behavioral; it does not satisfy FR03's missing static-PE classifier.
 
 ## Source layout
 
 | Path | Responsibility |
 | --- | --- |
-| `ML/config.py` | Feature names, keywords, default paths, threshold |
-| `ML/report_parser.py` | Current/legacy report validation, normalization, features, heuristic risk/evidence |
-| `ML/model_utils.py` | Convert records/reports into ordered model matrices |
-| `ML/build_dataset.py` | Convert a manifest of reports/labels into feature CSV |
-| `ML/train_classifier.py` | Train and save a Random Forest classifier |
-| `ML/train_anomaly.py` | Train and save an Isolation Forest on known-benign reports |
-| `ML/predict.py` | Heuristic/model inference through CLI or HTTP |
-| `ML/evaluate.py` | Classifier/anomaly metrics from labeled JSON records |
-| `ML/test_report_parser.py` | Normalization, feature, validation, persistence, and parity tests |
+| `ML/config.py` | Ordered features, feature-schema version, keywords, defaults |
+| `ML/report_parser.py` | Validation, normalization, features, heuristic risk/evidence |
+| `ML/model_utils.py` | Strict record/label handling, matrices, model schema metadata |
+| `ML/synthetic_reports.py` | Deterministic inert sandbox-compatible report generation |
+| `ML/build_dataset.py` | Strict manifest-to-JSON records or feature CSV export |
+| `ML/split_dataset.py` | Stratified train/validation/test and train-benign partitions |
+| `ML/train_classifier.py` | Random Forest training with schema metadata |
+| `ML/train_anomaly.py` | Isolation Forest training on explicit benign records |
+| `ML/tune_threshold.py` | Validation-only F1 threshold selection |
+| `ML/evaluate.py` | Classifier/anomaly metrics from labeled records |
+| `ML/predict.py` | Heuristic/model CLI and HTTP inference plus health metadata |
+| `ML/test_end_to_end.py` | Generation-to-saved-model HTTP integration test |
+
+Exact commands and cautions are in [ML/SYNTHETIC_DATA.md](../../ML/SYNTHETIC_DATA.md).
 
 ## Input contract
 
-The parser accepts the expected sandbox shape with a nonnegative integer summary and arrays for processes, file drops, registry events, network connections, DNS queries, and remote threads. It also supports a documented legacy behavior/network shape.
+The parser accepts a current sandbox shape with nonnegative summary counts and event arrays for processes, files, registry, network, DNS, and remote threads. A documented legacy shape is also normalized.
 
-Missing telemetry, invalid counts, invalid event arrays, or invalid signatures raise errors rather than silently becoming zero activity. Summary counts are authoritative because event arrays may be abbreviated. DNS queries are not counted as network connections.
-
-The backend's `sandboxToMl.js` adapter maps currently known sandbox field names into this shape. Once producer and consumer agree on one schema, that adapter should be reduced or removed.
+Missing/unusable telemetry, invalid counts, invalid arrays, or invalid signatures raise errors rather than becoming zero activity. Summary counts are authoritative because event arrays can be abbreviated. The backend's `sandboxToMl.js` maps known producer fields into this contract.
 
 ## Feature schema
 
@@ -40,88 +45,106 @@ The ordered features are:
 8. `has_persistence_signature`
 9. `has_network_signature`
 
-Persistence evidence includes signature keywords and raw behaviors such as Run/RunOnce registry paths or suspicious scheduled-task commands. Network evidence includes signature keywords or observed connection/DNS counts.
+`FEATURE_SCHEMA_VERSION` and the ordered names are attached to newly trained estimators. Prediction rejects known incompatible schema/count metadata. Older models can load but report `schema_verified: false`; feature-count equality alone cannot prove semantic compatibility.
 
-## Heuristic risk
+## Heuristic and model output
 
-`analyze_report()` applies bounded weights to the feature counts, transforms the sum with a logistic function, and labels the result using configured risk thresholds. This is a deterministic project heuristic. It is not a trained probability, calibration result, or measured detector accuracy.
+Without a classifier, `risk_score` comes from a deterministic heuristic and `prediction_source` is `heuristic`. This score is not a calibrated probability.
 
-Output contains `malicious`, `risk_score`, `risk_level`, features, evidence, and `prediction_source: heuristic` when no model is supplied.
+With a classifier, the malicious-class probability is compared with the explicitly supplied threshold and `prediction_source` is `trained_model`. Anomaly output is separate: `anomaly_prediction`/`anomaly_score` do not replace the main risk verdict.
 
-## Optional models
+Health and prediction responses include:
 
-`train_classifier.py` fits a scikit-learn Random Forest to reports with binary labels. `train_anomaly.py` fits an Isolation Forest to known-benign reports. Both persist with joblib. Inference may load either or both:
+- Active threshold and runtime feature schema.
+- Classifier/anomaly loaded state and estimator type.
+- SHA-256 artifact version for models loaded from disk.
+- Recorded schema version and `schema_verified` state.
 
-```bash
-cd ML
-python3 predict.py --file sandbox_example.json \
-  --classifier-model random_forest.joblib \
-  --anomaly-model isolation_forest.joblib
+Local model paths are not exposed.
+
+## Reproducible synthetic workflow
+
+The development path is:
+
+```text
+ML/synthetic_reports.py
+  → ML/build_dataset.py
+  → ML/split_dataset.py
+  → train classifier/anomaly
+  → ML/tune_threshold.py on validation
+  → evaluate untouched synthetic test split
+  → ML/predict.py --serve
 ```
 
-Classifier output requires `predict_proba()` and a malicious class labeled `1`. When models are loaded, output identifies `prediction_source: trained_model`, classifier probability/prediction, and/or anomaly result/score.
+Generation uses inert report strings and a fixed seed. Export rejects invalid reports/labels. Splitting is stratified, rejects duplicate reports/job IDs, and reserves train, validation, and test partitions. Threshold tuning maximizes malicious-class F1 on validation probabilities with deterministic tie-breaking.
+
+The committed end-to-end test is designed to exercise this development workflow, but the current end-to-end test was blocked when `split_dataset.py` could not import NumPy. Synthetic labels/scenarios are invented, some classes intentionally share feature vectors, and metrics are not real-world malware-detection evidence. Real sample-family grouping and temporal/leakage controls remain the team's responsibility.
 
 ## HTTP inference
 
 ```bash
-cd ML
-python3 predict.py --serve --host 127.0.0.1 --port 8000
+python ML/predict.py --serve \
+  --classifier-model models/random_forest.joblib \
+  --anomaly-model models/isolation_forest.joblib \
+  --threshold 0.5
 ```
 
-- `GET /` and `GET /health` return service health.
-- `POST /`, `/analyze`, or `/analyze-report` accepts one JSON report.
-- Valid analysis returns JSON; invalid JSON/report/model behavior returns a JSON error with status 400.
-- Other paths return 404.
+- `GET /` and `/health` return service/model metadata.
+- `POST /`, `/analyze`, and `/analyze-report` accept one report.
+- Invalid JSON/report/model input returns JSON with status 400.
 
-The backend uses `BEHAVIORAL_ML_URL` after a successful sandbox stage. The service has no authentication, TLS, request-size limit, rate limit, model hot-reload, or production server wrapper; bind it to loopback for local development.
+The server is a development `ThreadingHTTPServer` with no authentication, TLS, request-size/rate controls, or production lifecycle. Bind it to loopback unless protected by a reviewed deployment boundary.
 
-## Training data and evaluation
+## Tests
 
-Training and evaluation expect user-supplied JSON records and model artifacts. The repository does not include:
+Six modules contain 39 tests:
 
-- Dataset name/version, source, license, collection period, counts, or families.
-- Labeling/deduplication methodology.
-- Train/validation/test split or leakage checks.
-- A trained `.joblib` artifact or artifact hash.
-- Threshold selection evidence.
-- Accuracy, precision, recall, F1, ROC AUC, FPR, FNR, or held-out-family result.
+- `ML/test_report_parser.py`
+- `ML/test_build_dataset.py`
+- `ML/test_synthetic_reports.py`
+- `ML/test_training.py`
+- `ML/test_prediction_metadata.py`
+- `ML/test_end_to_end.py`
 
-`evaluate.py` can compute relevant metrics after those inputs exist, but the tool's presence is not an evaluation result.
+Run:
 
-## Test evidence
+```bash
+python3 -B -m unittest discover -s ML -p "test_*.py" -v
+```
 
-`ML/test_report_parser.py` contains fifteen tests for documented and zero activity, missing/invalid counts, invalid arrays/signatures, legacy input, nonmutation, persistence evidence, missing telemetry, and CLI/HTTP model parity.
+The end-to-end test generates 300 synthetic reports in a temporary directory, exports/splits, trains both model types, tunes the classifier threshold, evaluates the synthetic test partition, starts the actual HTTP process, verifies artifact/schema metadata, compares CLI/HTTP output, and rejects empty telemetry. It does not call the backend or live sandbox.
 
-Observed on 2026-11-03: the module failed import because `joblib` was not installed. No ML assertions ran. Install the root requirements in an isolated environment and rerun before reporting a passing result.
+Fresh 2026-11-19 results appear in [Prototype Status](../prototype-status.md#verification-record).
 
-## Security and quality notes
+## Security and quality
 
-- Joblib model files can execute code while loading; load only trusted artifacts with recorded hashes/provenance.
-- Training data and sandbox telemetry may contain sensitive paths, domains, IPs, registry values, or user identifiers.
-- The simple HTTP server is for development, not untrusted networks.
-- Missing data intentionally fails closed at the parser boundary instead of scoring an empty report.
-- Dataset licensing, class balance, family leakage, temporal leakage, and threshold calibration must be resolved before performance claims.
+- Joblib can execute code while loading; use only trusted artifacts with provenance and hashes.
+- Reports can contain sensitive paths, commands, domains, IPs, registry values, and identifiers.
+- Synthetic development data must remain clearly labeled.
+- Real evaluation needs licensed data, deduplication, family-aware/temporal separation, immutable test data, calibrated thresholds, and confidence intervals as appropriate.
+- `health.status: ok` means the service runs; inspect model metadata to learn whether trained models are loaded.
 
 ## Known limitations
 
-- No static malware classifier despite FR03.
-- No bundled data, artifacts, or metrics.
-- No feature importance export from trained models.
-- No cross-validation or hyperparameter search in the current scripts.
-- No model registry/version field in inference output.
-- Behavioral input cannot be produced end to end without the absent sandbox.
+- No static malware classifier or backend `static_ml` stage.
+- No real dataset, trained artifact, model/dataset card, or reproducible real benchmark.
+- No held-out-family result.
+- No feature-importance export or calibration workflow.
+- Random record splitting cannot establish independence between related real samples/families.
+- Live behavioral input depends on a sandbox whose transfer/export/containment path is unverified.
 
 ## Next work
 
-1. Create dataset and model cards with licenses, counts, families, split, leakage checks, and hashes.
-2. Implement the separate static-PE feature/model contract.
-3. Train and evaluate versioned behavioral artifacts with reproducible commands.
-4. Run the held-out-family experiment and compare individual/layered configurations.
-5. Add calibrated thresholds, feature importance, artifact validation, and production service controls.
+1. Create real dataset/model cards with licenses, counts, families, hashes, and split policy.
+2. Add family-aware/temporal leakage controls and immutable evaluation artifacts.
+3. Implement the separate static-PE ML contract and stage.
+4. Export interpretable model evidence and calibration results.
+5. Harden/authenticate the service and verify it with inert live sandbox output.
 
 ## Related documentation
 
-- [Dynamic-analysis integration](dynamic-analysis.md)
-- [Backend component](backend.md)
+- [Synthetic workflow](../../ML/SYNTHETIC_DATA.md)
+- [Dynamic analysis](dynamic-analysis.md)
+- [Backend](backend.md)
 - [Architecture](../architecture.md)
 - [Prototype Status](../prototype-status.md)
