@@ -1,9 +1,9 @@
 "use strict";
 
 /**
- * Wraps the static analyzer (malware_detection/analyze.py) as documented in
- * that component's DEMO_AND_HANDOFF.md ("Future Node.js integration (design
- * only)" section). This file is the implementation of that design:
+ * Wraps the static analyzer (malware_detection/analyze.py), following the
+ * Node.js integration design that component originally documented and the
+ * I/O contract in malware_detection/REPORT_CONTRACT.md:
  *
  *   1. Resolve absolute paths for the Python interpreter, the analyzer
  *      script, and the input file. Launch with spawn(), args passed
@@ -106,12 +106,31 @@ function runAnalyzer(inputFilePath) {
         return;
       }
       if (exitCode !== 0) {
+        // The contract's failure shape is {"error", "message"} as JSON on
+        // stderr (e.g. PEFormatError for a file that is not a PE). Surface
+        // it when present so the dashboard can show the analyzer's reason.
+        let analyzerError = null;
+        try {
+          const parsed = JSON.parse(stderr);
+          if (parsed && typeof parsed.error === "string") {
+            analyzerError = { error: parsed.error, message: String(parsed.message ?? "") };
+          }
+        } catch (_) {
+          /* stderr was not the contract's JSON error; keep the raw text below */
+        }
         finish(
-          new AnalyzerError("Analyzer exited with a nonzero status", "NONZERO_EXIT", {
-            exitCode,
-            signal,
-            stderr: stderr.slice(0, 4000),
-          })
+          new AnalyzerError(
+            analyzerError
+              ? `Analyzer rejected the file: ${analyzerError.error}: ${analyzerError.message}`
+              : "Analyzer exited with a nonzero status",
+            "NONZERO_EXIT",
+            {
+              exitCode,
+              signal,
+              analyzer_error: analyzerError,
+              stderr: stderr.slice(0, 4000),
+            }
+          )
         );
         return;
       }

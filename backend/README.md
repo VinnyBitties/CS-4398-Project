@@ -1,90 +1,110 @@
-# backend
+# Sentinel Backend
 
-Sentinel's core REST API: accepts sample uploads, runs them through the analysis
-pipeline stages, stores scan history, and serves results to the dashboard. Scope
-per `Sentinel_Backend_Development_Documentation_Form.docx`: REST API, database,
-job queue/orchestration across signature → static ML → sandbox → behavioral ML →
-LLM stages, and operational configuration.
+The backend is Sentinel's Express REST API, database, job queue, analysis orchestrator, and static-site host. This guide describes `dev-branch` on 2026-11-19.
 
-## Why Node.js
-
-`malware_detection`'s `DEMO_AND_HANDOFF.md` originally specified a "Future
-Node.js integration (design only)" for calling into the Python static analyzer
-via `child_process.spawn`. That section was dropped in Kyle's later
-`dev-branch` rewrite, but the team confirmed (2026-09-29) Node.js is still the
-plan. This backend implements that design in `src/analyzer/runAnalyzer.js`.
-
-## Open coordination items
-
-- **Sandbox telemetry schema.** The team confirmed (2026-09-29) this project
-  uses a custom virtual sandbox, not Cuckoo Sandbox. The ML team's
-  `report_parser.py` (`ML-Axel` branch) is built specifically against Cuckoo's
-  JSON shape (`signatures`, `network`, `behavior.summary.*`). Since the custom
-  sandbox won't emit that exact format, someone needs to either make the
-  sandbox Cuckoo-compatible or update `report_parser.py`'s field mapping —
-  needs a conversation between Dynamic Analysis (Vincent, Jarrel), ML (Axel,
-  Diego), and backend before the behavioral-ML stage can be wired in for
-  real. `src/stages/httpStage.js` (below) is ready on the backend side either
-  way, since the HTTP-call pattern doesn't depend on the payload shape.
-- **Route naming.** `docs/component-plan.example.md` on `main` sketches
-  `POST /scans`; this implementation uses `POST /api/samples`. Confirm which
-  convention the frontend/dashboard expects before either becomes load-bearing.
-
-## Setup
+## Quick start
 
 ```bash
 cd backend
 npm install
 cp .env.example .env
-npm run dev     # starts on http://localhost:3000 by default
+npm run dev
 ```
 
-## Current status (what's implemented vs. stubbed)
+Open `http://localhost:3000/`. The default path needs Node.js plus Python 3 and uses local SQLite, the safe signature catalog, byte-based file detection/content analysis, and a mock PE analyzer.
 
-- `GET /api/health` — implemented.
-- `POST /api/samples` (multipart, field `file`) — implemented against a
-  **mock** analyzer (`scripts/mock_analyze.py`), which mimics
-  `analyze.py`'s I/O contract (`REPORT_CONTRACT.md`, schema `1.0.0`) closely
-  enough to develop and test the API without depending on the
-  `malware-detection` branch. Runs the file through the analyzer, computes
-  `sha256`, checks it against an in-memory signature list
-  (`src/signatures/knownHashes.js` — replace with a real YARA/hash catalog
-  per the Week 3 plan), and stores both in SQLite.
-- `GET /api/samples/:id` — implemented; returns a sample plus all its stage
-  results.
-- `POST /api/links` — **stubbed**, returns 501. Depends on Dynamic Analysis
-  extending the sandbox to render URLs (Week 8) before this can do anything
-  real.
-- Static ML, sandbox, behavioral ML, and LLM stages — **not started**. The
-  `results` table already has a `stage` column designed to hold each of
-  these as they come online, so wiring in a new stage means adding another
-  `results` row per sample, not a schema change.
-- Job queue — **not started**. Right now everything runs synchronously
-  inside the request handler, which is fine only while analysis is fast
-  (signature stage). Once the sandbox stage is wired in (which takes much
-  longer per Week 7/8), this needs to become async — a real queue (e.g.
-  BullMQ + Redis) or at minimum a background worker, so uploads don't hang
-  an HTTP request for minutes.
-- `src/stages/httpStage.js` — a **second integration pattern**, for a stage
-  exposed as a long-running HTTP service rather than a spawned CLI (matches
-  the ML team's `predict.py --serve`). Implemented and tested against a mock
-  HTTP server (`npm test` / `test/httpStage.test.js`, no deps required — runs
-  even before `npm install`), but not called from any route yet — blocked on
-  the sandbox telemetry schema question above.
+> Use inert fixtures only. Configuring `SANDBOX_URL` does not prove that the dynamic environment is safe for real malware.
 
-## Switching from the mock analyzer to the real one
+## API
 
-Once `malware-detection` is merged (or while developing against it locally),
-set in `.env`:
+- `GET /api/health`
+- `POST /api/auth/register`, `/login`, `/logout`; `GET /api/auth/me`
+- `POST /api/samples` multipart field `file`
+- `POST /api/links` JSON `{ "url": "https://..." }`
+- `GET /api/samples?limit=&offset=` newest-first scoped history
+- `GET /api/samples/:id` scoped scan detail
 
-```
-ANALYZER_SCRIPT_PATH=/absolute/path/to/malware_detection/analyze.py
-PYTHON_PATH=/absolute/path/to/malware_detection/.venv/Scripts/python.exe
+Submit routes return `202` by default. `?wait=true` waits up to `WAIT_TIMEOUT_MS`, returning `201` only when the job finishes in time. Exact fields/errors are in [docs/api-contract.md](docs/api-contract.md).
+
+## Pipeline
+
+`src/pipeline/stages.js` defines the order:
+
+1. `signature` for files and links.
+2. `file_type` for files when `CONTENT_ANALYZER_PATH` is nonempty.
+3. `static_analysis` for PE/DOS, unknown fallback, or missing type output; `content_analysis` for every detected non-PE format. Unknown classifications run both `static_analysis` and `content_analysis`.
+4. `sandbox` and `behavioral_ml` when `SANDBOX_URL` is set.
+5. `llm` when `LLM_DIR` is set.
+
+`static_ml` is not registered.
+
+A conditional stage that does not apply creates no result row. A thrown stage error is stored on that stage and later stages are still considered.
+
+### File type and non-PE content
+
+`scripts/content_analyze.py` identifies content from bytes and gathers bounded evidence from Office, PDF, scripts, source, archives, shortcuts, web content, and generic binaries. It uses the standard library by default; `scripts/requirements-content.txt` adds deeper macro and RAR/7z/ISO inspection.
+
+```dotenv
+CONTENT_ANALYZER_PATH=./scripts/content_analyze.py
+CONTENT_ANALYZER_TIMEOUT_MS=30000
 ```
 
-`runAnalyzer.js` doesn't care which script it's pointed at as long as the
-script honors the same contract (JSON to stdout + exit 0 on success; JSON
-error to stderr + exit 1 on failure; `schema_version` field).
+Set `CONTENT_ANALYZER_PATH=` only to disable both `file_type` and `content_analysis` deliberately.
+
+### PE analyzer
+
+The default `scripts/mock_analyze.py` emits inert PE-shaped data. To use the real analyzer:
+
+```bash
+python3 -m venv ../.venv
+source ../.venv/bin/activate
+python -m pip install -r ../malware_detection/requirements.txt
+```
+
+```dotenv
+PYTHON_PATH=../.venv/bin/python
+ANALYZER_SCRIPT_PATH=../malware_detection/analyze.py
+```
+
+The backend accepts PE report schema 1.0.0 through 1.2.0. Recognized non-PE content other than the `unknown` category is routed away from this stage. Unknown fallback input also reaches content analysis and may fail static analysis with a controlled PE-format error.
+
+### Sandbox and behavioral ML
+
+The backend posts multipart files to `<SANDBOX_URL>/detonate`, validates usable telemetry, normalizes known field variants, and calls `BEHAVIORAL_ML_URL`.
+
+The checked-in `dynamic_telemetry/api.py` does not yet demonstrate working guest sample transfer or EVTX export. Mock client/adapter tests are not live detonation or containment evidence.
+
+### LLM and demo intelligence
+
+Set `LLM_DIR=../llm-threat-intelligence` to enable the final stage. The bridge returns demo indicator results and an evidence prompt. Explanation status is:
+
+- `generated`: optional Groq call succeeded.
+- `skipped`: no `GROQ_API_KEY`.
+- `error`: optional provider call failed.
+- `not_generated`: loaded component has no generator.
+
+With a key, the committed component requests Groq model `openai/gpt-oss-20b`. Missing credentials or provider errors do not discard prompt/intelligence output. ATT&CK mapping is not implemented.
+
+## Persistence, queue, and sessions
+
+`src/db.js` exposes one logical schema over SQLite or PostgreSQL. Uploaded files stay on the receiving host, so `WORKER_ID` limits shared-database job ownership. The queue runs inside one Node process with configurable concurrency and re-queues interrupted owned jobs at startup.
+
+Passwords use scrypt. The HttpOnly session cookie contains a random token whose SHA-256 is stored server-side. Account use is optional; scans are scoped to the signed-in user or guest scope.
+
+## Configuration groups
+
+| Area | Variables |
+| --- | --- |
+| Server/site | `PORT`, `WEBSITE_DIR`, `CORS_ORIGINS` |
+| Database | `DATABASE_URL`, `DATABASE_PATH`, `DATABASE_SSL`, `DATABASE_POOL_SIZE`, `WORKER_ID` |
+| Upload/jobs | `UPLOAD_DIR`, `MAX_UPLOAD_BYTES`, `JOB_CONCURRENCY`, `WAIT_TIMEOUT_MS` |
+| PE/content | `PYTHON_PATH`, `ANALYZER_SCRIPT_PATH`, `ANALYZER_TIMEOUT_MS`, `CONTENT_ANALYZER_PATH`, `CONTENT_ANALYZER_TIMEOUT_MS` |
+| Signatures | `SIGNATURE_CATALOG_PATH`, `SIGNATURE_HASHLIST_PATH` |
+| Sandbox/ML | `SANDBOX_URL`, `SANDBOX_DETONATION_SECONDS`, `SANDBOX_TIMEOUT_MS`, `BEHAVIORAL_ML_URL`, `BEHAVIORAL_ML_TIMEOUT_MS` |
+| LLM | `LLM_DIR`, `LLM_BRIDGE_PATH`, `LLM_TIMEOUT_MS`, inherited `GROQ_API_KEY` |
+| Accounts | `SESSION_TTL_HOURS`, `COOKIE_SECURE`, `ALLOW_REGISTRATION`, `MAX_FAILED_LOGINS` |
+
+See [.env.example](.env.example) for defaults and comments. Never commit `.env`, credentials, feeds, uploads, or databases.
 
 ## Tests
 
@@ -92,17 +112,38 @@ error to stderr + exit 1 on failure; `schema_version` field).
 npm test
 ```
 
-Runs against the mock analyzer and an in-memory SQLite database — no real
-PE files or network access needed.
+This runs `test/*.test.js`, including auth, routes, persistence, queue, catalog, content analysis, dashboard data, HTTP stages, sandbox/ML, LLM, and real-analyzer boundaries. Tests use isolated SQLite/mock services; real-analyzer cases can skip without `pefile`.
 
-## Next steps (see the Week-by-Week Plan / Kickoff Checklist)
+```bash
+npm run test:dashboard
+```
 
-1. Fill in the Backend Development Documentation Form as you go: API
-   Endpoint Record, Database Record, Decision Log (e.g. "why SQLite for
-   dev"), Testing and Verification.
-2. Swap the mock analyzer for the real one once `malware-detection` merges,
-   and confirm the Node.js integration design still holds for real PE
-   reports (larger `strings.sample` arrays, real `imports`, etc.).
-3. Replace the in-memory known-hash Set with a real signature source.
-4. Decide on the job-queue approach before the sandbox stage lands — that's
-   the point synchronous request handling breaks.
+This runs Playwright tests in `test/dashboard/` and requires a compatible browser or `DASHBOARD_BROWSER_PATH`. The suite uses synthetic fixtures and a temporary inert backend; it does not call a live sandbox/provider.
+
+For a disposable PostgreSQL test database:
+
+```bash
+TEST_DATABASE_URL=postgres://user:pass@localhost:5432/sentinel_test \
+TEST_DATABASE_SSL=false npm run test:pg
+```
+
+The PostgreSQL suite empties its test tables. Never point it at shared/project data.
+
+Fresh command results are recorded in [the project status](../docs/prototype-status.md#verification-record).
+
+## Current limitations
+
+- No static-ML stage or unified overall verdict.
+- Default PE output is a mock.
+- Dynamic safety/live operation is unverified.
+- Optional ML/LLM services require separate dependency and policy setup.
+- Single-process queue and host-local uploads limit horizontal scaling.
+- No upload/record deletion endpoint or retention job.
+- No production audit/metrics/tracing, artifact storage, TLS, backup, or secret manager.
+
+## Related documentation
+
+- [API contract](docs/api-contract.md)
+- [Database notes](docs/azure-database.md)
+- [Backend component record](../docs/components/backend.md)
+- [Setup and Operations](../docs/setup-and-operations.md)

@@ -1,0 +1,13 @@
+[Unit]
+Description=Malware Sandbox Detonation FastAPI Engine
+After=network.target libvirtd.service
+
+[Service]
+User=Coinflippers
+WorkingDirectory=/home/Coinflippers
+ExecStart=/usr/bin/python3 -m uvicorn api:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

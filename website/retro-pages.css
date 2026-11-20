@@ -1,0 +1,51 @@
+/* Home and account layouts, sharing the Reports palette, borders and reveal effect. */
+body { margin:0; min-height:100vh; color:#222; }
+.home-page { display:grid; grid-template-columns:190px minmax(0,1fr); grid-template-rows:auto; }
+.home-page .page { display:block; min-width:0; width:100%; }
+.home-page .sidebar a { display:block; }
+.page-heading { display:flex; justify-content:space-between; align-items:center; gap:16px; }
+.page-heading h1,.page-heading p { margin:0; }
+.page-heading .eyebrow { margin-bottom:8px; }
+.button { display:inline-block; cursor:pointer; }
+.brand-coin { display:block; }
+.retro-panel { padding:14px; border:3px outset #eee; background:#e4d6b7; }
+.window-title { margin:-10px -10px 18px; padding:6px 8px; background:#222; color:#ffe082; font:bold 16px Arial,Helvetica,sans-serif; }
+.home-page .content-container { width:100%; max-width:620px; margin:20px auto; }
+.home-page .coin-container { width:120px; height:120px; margin:22px auto; font-size:48px; }
+.home-page .input-container { max-width:460px; margin:0 auto 15px; }
+.home-page #drop-zone { height:155px; border:3px inset #eee; border-radius:0; background:#fff0c5; color:#5a3b00; font:bold 17px "Times New Roman",serif; text-align:center; }
+.home-page .link-container label { width:100%; display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-weight:bold; }
+.home-page .link-input { flex:1; min-width:0; }
+input:not([type="file"]) { padding:8px; border:2px inset #eee; border-radius:0; background:#fffdf3; color:#222; font:14px "Courier New",monospace; }
+input:not([type="file"]):focus-visible { outline:2px solid #956516; outline-offset:2px; }
+.home-page .submit-file-link-check > button { width:100%; height:auto; padding:8px; border:3px outset #eee; border-radius:0; background:#ffe082; font:bold 16px Arial,Helvetica,sans-serif; color:#222; }
+.home-page .progress-container { width:100%; max-width:460px; margin:auto; }
+.home-page .progress-container h2 { font:bold 21px "Times New Roman",serif; overflow-wrap:anywhere; }
+.home-page .progress-step { height:auto; min-height:60px; grid-template-columns:42px minmax(0,1fr); gap:10px; border:2px inset #eee; background:#fff5d9; }
+.home-page .progress-step-content { grid-template-rows:auto auto; overflow-wrap:anywhere; }
+.home-page .progress-step .side { width:38px; height:38px; }
+.home-page #scan-again,.home-page #view-results:not([hidden]) { padding:6px 12px; border:3px outset #eee; border-radius:0; background:#e4d6b7; color:#5a3b00; font:bold 13px Arial,Helvetica,sans-serif; }
+.home-page #view-results { text-decoration:underline; }
+.login-page { display:block; padding:24px 12px; }
+.login-main { max-width:780px; margin:auto; }
+.login-page .page-heading { justify-content:center; }
+.login-page .name { margin:4px 0; font-size:42px; }
+.login-page .sign-in { display:block; position:static; min-width:0; min-height:0; width:100%; max-width:420px; margin:22px auto; }
+.login-page .infobox { padding:0 12px 14px; }
+.login-page .form-row { text-align:left; margin:12px 0; gap:6px; }
+.login-page .form-row label,.popup-input label { display:block; font-weight:bold; }
+.login-page .form-row input { width:100%; height:auto; border-radius:0; text-align:left; }
+.login-page .submit { display:block; width:calc(100% - 24px); height:auto; margin:0 auto; padding:8px; background:#ffe082; border:3px outset #eee; border-radius:0; font-weight:bold; }
+.non-sign-in { justify-content:center; flex-wrap:wrap; margin:18px 0 6px; gap:16px; }
+.non-sign-in a { font-size:13px; }
+#loginstatus,#signupstatus { color:#b00020; font:13px Arial,Helvetica,sans-serif; overflow-wrap:anywhere; }
+.popup-overlay { z-index:20; padding:16px; overflow:auto; grid-template-columns:minmax(0,420px); }
+.popup-content { width:min(420px,100%); max-height:calc(100dvh - 32px); overflow:auto; padding:14px; border:3px outset #eee; border-radius:0; background:#e4d6b7; box-shadow:4px 4px #222; }
+.popup-title { text-align:left; }
+.popup-input { text-align:left; margin:12px 0; }
+.popup-input input { width:100%; margin-top:6px; border-radius:0; }
+.popup-buttons { margin-top:20px; gap:12px; }
+.btn-submit,.btn-close { border:3px outset #eee; border-radius:0; background:#ffe082; color:#222; padding:7px 16px; }
+.btn-close { background:#ddd; }
+@media(prefers-reduced-motion:reduce) { .home-page .spinning { animation:none; } .home-page .landing { transition:none; } }
+@media(max-width:760px) { .home-page { display:block; } .home-page .sidebar { display:flex; align-items:center; flex-wrap:wrap; gap:8px; } .home-page .account { margin-left:auto; padding:0; } .home-page .brand-coin { display:none; } .home-page .page-heading { flex-direction:column; } .login-page { padding:12px; } .login-page .name { font-size:34px; } .popup-buttons { flex-wrap:wrap; } }

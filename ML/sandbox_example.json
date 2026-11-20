@@ -1,0 +1,40 @@
+{
+  "job_id": "a1b2c3d4",
+  "original_filename": "suspicious_payload.exe",
+  "timeout_seconds": 15,
+  "summary": {
+    "processes_created": 3,
+    "network_connections": 1,
+    "dns_queries": 2,
+    "files_created": 4,
+    "registry_modifications": 12,
+    "remote_threads_injected": 0
+  },
+  "processes": [
+    {
+      "image": "example.exe"
+    }
+  ],
+  "network": [
+    {
+      "protocol": "tcp",
+      "dest_port": "443"
+    }
+  ],
+  "dns": [
+    {
+      "query_name": "c2-domain.example.com"
+    }
+  ],
+  "file_drops": [
+    {
+      "target_filename": "example.exe"
+    }
+  ],
+  "registry": [
+    {
+      "event_type": "SetValue"
+    }
+  ],
+  "remote_threads": []
+}

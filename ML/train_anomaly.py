@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+# Trains and saves an Isolation Forest model for detecting unusual sandbox reports.
+
 import argparse
 from pathlib import Path
 
 import joblib
 from sklearn.ensemble import IsolationForest
 
-from model_utils import load_records, reports_to_matrix
+from model_utils import benign_training_records, load_records, reports_to_matrix, stamp_feature_schema
 
 
 def main() -> None:
@@ -16,7 +18,7 @@ def main() -> None:
     parser.add_argument("--contamination", default="auto", type=lambda value: value if value == "auto" else float(value))
     args = parser.parse_args()
 
-    records = load_records(args.data)
+    records = benign_training_records(load_records(args.data))
     features = reports_to_matrix(records)
     model = IsolationForest(
         contamination=args.contamination,
@@ -24,6 +26,8 @@ def main() -> None:
         n_jobs=-1,
     )
     model.fit(features)
+    stamp_feature_schema(model)
+    Path(args.model_out).parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, Path(args.model_out))
     print(f"Saved Isolation Forest model to {args.model_out}")
 

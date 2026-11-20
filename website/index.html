@@ -4,40 +4,136 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Coin Flip Defense</title>
-	<link rel="icon" type="image/svg+xml" href="icon.svg">
+	<link rel="icon" type="image/svg+xml" href="head.svg">
 	<link rel="stylesheet" href="style.css">
+	<link rel="stylesheet" href="retro.css">
+	<link rel="stylesheet" href="retro-pages.css">
+	<script src="retro-loading.js" defer></script>
 </head>
-<body>
-	<div class="sign-in">
-		<h1 class="name">CoinFlip Defense</h1>
+<body class="login-page">
+	<main class="login-main" tabindex="-1">
+	<header class="page-heading" data-retro-render><div><p class="eyebrow">:: WELCOME TO OUR CYBER HEADQUARTERS ::</p><h1 class="name">Coin Flip Defense</h1><p class="muted">File scanning on the World Wide Web.</p></div></header>
+	<div class="welcome-strip" data-retro-render>★ MEMBERS &amp; VISITORS WELCOME ★</div>
+	<div class="sign-in retro-panel" data-retro-render>
+		<h2 class="window-title">Member sign-in</h2>
 		<div id="loginstatus"></div>
 		<div class="infobox">
 			<div class="form-row">
-				<div for="username">Username</div>
+				<label for="username">Username</label>
 				<input type="text" id="username" class="form-input" name="username" placeholder="Enter username" autocomplete="off" required>
 			</div>
 			<div class="form-row">
-				<div for="password">Password</div>
+				<label for="password">Password</label>
 				<input type="password" id="password" class="form-input" name="password" placeholder="Enter password" required>
 			</div>
 		</div>
 		<button onclick="submitInfo()" class="submit">Log In</button>
 		<div class="non-sign-in">
-			<a>Create account</a>
-			<a href="dashboard/home.html?login=0">No Sign In</a>
+			<a href="" id="accountCreator">Create account</a>
+			<a href="dashboard/home.html?login=0">Continue as guest</a>
+		</div>
+	</div>
+	<footer class="retro-footer" data-retro-render><p>Thanks for visiting Coin Flip Defense!</p><small>100% HTML POWERED · NO FRILLS, ALL SCANS</small></footer>
+	</main>
+	
+	<div id="popup" class="popup-overlay">
+		<div class="popup-content" role="dialog" aria-modal="true" aria-labelledby="signup-title">
+			<h2 id="signup-title" class="popup-title window-title">Create Account</h2>
+			<form id="signupForm">
+				<div id="signupstatus"></div>
+				<div class="popup-input">
+					<label for="newUsername">Username:</label>
+					<input type="text" id="newUsername" autocomplete="username" required>
+				</div>
+				<div class="popup-input">
+					<label for="newPassword">Password:</label>
+					<input type="password" id="newPassword" autocomplete="new-password" minlength="8" required>
+				</div>
+				<div class="popup-input">
+					<label for="confirmPassword">Confirm Password:</label>
+					<input type="password" id="confirmPassword" autocomplete="new-password" required>
+				</div>
+				<div class="popup-buttons">
+					<button type="submit" class="btn-submit">Sign Up</button>
+					<button type="button" class="btn-close" onclick="closePopup()">Cancel</button>
+				</div>
+			</form>
 		</div>
 	</div>
 	
+	<script src="api.js"></script>
 	<script>
-	function submitInfo() {
-		const username = document.getElementById("username").value;
+	const DASHBOARD = "dashboard/home.html";
+	const loginStatus = document.getElementById("loginstatus");
+	const signupStatus = document.getElementById("signupstatus");
+	const loginButton = document.querySelector(".submit");
+
+	// Already signed in? Skip straight to the dashboard.
+	auth.currentUser().then((user) => {
+		if (user) window.location.href = DASHBOARD;
+	});
+
+	async function submitInfo() {
+		const username = document.getElementById("username").value.trim();
 		const password = document.getElementById("password").value;
+		if (username === "" || password === "") {
+			loginStatus.textContent = "Username and password must be filled out.";
+			return;
+		}
+		loginButton.disabled = true;
+		loginStatus.textContent = "";
+		const res = await auth.login(username, password);
+		loginButton.disabled = false;
 		document.getElementById("password").value = "";
-		if(username === "" || password ==="") {
-			const status = document.getElementById("loginstatus");
-			status.textContent = "Username and password must be filled out.";
-		} else window.location.href="dashboard/home.html?login=1"
+		if (res.ok) {
+			window.location.href = DASHBOARD;
+		} else {
+			loginStatus.textContent = errorMessage(res, "Login failed.");
+		}
 	}
+
+	// Enter in either field logs in.
+	for (const id of ["username", "password"]) {
+		document.getElementById(id).addEventListener("keydown", (e) => {
+			if (e.key === "Enter") submitInfo();
+		});
+	}
+
+	document.getElementById("accountCreator").addEventListener("click", function(e) {
+		e.preventDefault();
+		signupStatus.textContent = "";
+		document.getElementById("popup").style.display = "grid";
+		window.RetroLoading?.revealInChunks("signup", [document.querySelector(".popup-content")]);
+		document.getElementById("newUsername").focus({ preventScroll: true });
+	});
+
+	function closePopup() {
+		window.RetroLoading?.finishReveal("signup");
+		document.getElementById("popup").style.display = "none";
+		document.getElementById("accountCreator").focus({ preventScroll: true });
+	}
+
+	// Create account: registering also signs the new user in.
+	document.getElementById("signupForm").addEventListener("submit", async (e) => {
+		e.preventDefault();
+		const username = document.getElementById("newUsername").value.trim();
+		const password = document.getElementById("newPassword").value;
+		const confirm = document.getElementById("confirmPassword").value;
+		if (password !== confirm) {
+			signupStatus.textContent = "Passwords do not match.";
+			return;
+		}
+		const button = e.target.querySelector(".btn-submit");
+		button.disabled = true;
+		signupStatus.textContent = "";
+		const res = await auth.register(username, password);
+		button.disabled = false;
+		if (res.ok) {
+			window.location.href = DASHBOARD;
+		} else {
+			signupStatus.textContent = errorMessage(res, "Could not create the account.");
+		}
+	});
 	</script>
 </body>
 </html>
