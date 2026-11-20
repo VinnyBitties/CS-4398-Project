@@ -1,0 +1,10 @@
+{
+  "extractor_sha256": "8a5a5dc14f9f8029b1b9144d43c785b12c6e7a549b42cb4305e9667b11851c9c",
+  "metadata_bytes": 0,
+  "method_def_rows": 0,
+  "present": false,
+  "schema_version": "cfd-cli-declared-metadata-v1",
+  "sha256": "f1564b3c3eee87d62ef04ccf2c6b453020d3547faa2ccc5c9e2cef94fe659f2f",
+  "status": "complete",
+  "type_ref_rows": 0
+}

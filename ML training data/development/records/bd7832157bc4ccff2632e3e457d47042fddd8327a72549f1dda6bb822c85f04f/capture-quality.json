@@ -1,0 +1,122 @@
+{
+  "cleanup": {
+    "status": "complete"
+  },
+  "clock_domain": "guest UTC",
+  "collection": {
+    "attribution_schema": "cfd-process-guid-v1",
+    "bytes": 4811523,
+    "canary_nonce": "15aad6fd75393b6dbbf94ddf56c33e33ae9088347a3a0e7b92be6c7a8684b389",
+    "canary_process_id": 1856,
+    "canary_record_id": 165513,
+    "collector_profile_sha256": "fd5c412e58948278ea042f34551e3852bea97823c97bef5b26ff9787e083c107",
+    "collector_sha256": {
+      "collect.ps1": "0a267abb3e57653354cbfdd6b50e2a3005f70fa976809c0e35a3f4ef5df71237",
+      "start.ps1": "e9e82fc23c05bc7edadf47f0e07bbdf8b3d6aa077dd34bd8e33d3ceaa100ff1b"
+    },
+    "collector_version": "cfd-sysmon-v1",
+    "config_sha256": "99eebeeafdba7b5ac861fdaedf3caa3859ad7532ede2659351f4d373885df9d4",
+    "end_canary_process_id": 1628,
+    "end_canary_record_id": 168161,
+    "events_total": 2780,
+    "evtx_bytes": 3215360,
+    "evtx_sha256": "be456409cb29a406c1068109741b9f4f8d134d793bf4fdf5c8dee32a0711eacb",
+    "execution_limits": {
+      "collection_budget_seconds": 60,
+      "guest_deadline_at": "2026-11-17T18:05:59.706785+00:00",
+      "guest_lifetime_seconds": 300,
+      "observation_is_not_lifetime": true
+    },
+    "export_phase_start_ms": {
+      "end_canary": 2745,
+      "event_query": 5516,
+      "evtx": 14539,
+      "hashes": 15419,
+      "manifest": 15551,
+      "prechecks": 62,
+      "serialization": 6379
+    },
+    "finished_at": "2026-11-17T18:04:54.9686621Z",
+    "job_id": "8ce87075-5993-4845-8a0b-6aaa0d017c48",
+    "raw_sha256": "a6344053568f942eec07457dac78f07b8029f5a3eb5e025739e8225a21082980",
+    "sample_process_guid": "e6f64198-9719-6afc-8700-000000000600",
+    "sample_process_id": 1272,
+    "sample_record_id": 166622,
+    "sha256": "bd7832157bc4ccff2632e3e457d47042fddd8327a72549f1dda6bb822c85f04f",
+    "started_at": "2026-11-17T18:03:54.3024073Z",
+    "status": "complete",
+    "sysmon_event_ids": [
+      1,
+      3,
+      8,
+      11,
+      12,
+      13,
+      14,
+      22
+    ],
+    "window_selection": {
+      "candidate_events": 2780,
+      "evtx_scope": "bounded_candidate_window_superset",
+      "excluded_events": 0,
+      "excluded_record_ids": [],
+      "method": "xml_utc_ticks",
+      "query_end": "2026-11-17T18:04:54.9690000Z",
+      "query_start": "2026-11-17T18:03:54.3020000Z"
+    }
+  },
+  "export_feature_replay_matches_original": true,
+  "feature_availability": {
+    "categories": {
+      "reason": null,
+      "supported": true
+    },
+    "entropy": {
+      "reason": null,
+      "supported": true
+    },
+    "managed": {
+      "reason": null,
+      "supported": true
+    },
+    "native-v2": {
+      "reason": null,
+      "supported": true
+    },
+    "targets": {
+      "reason": null,
+      "supported": true
+    }
+  },
+  "guest_event_counts": {
+    "dns": 8,
+    "file_drops": 99,
+    "network": 4,
+    "processes": 27,
+    "registry": 2640,
+    "remote_threads": 0
+  },
+  "limitations": [
+    "Only the exact sample-launch record is identity-verified; other guest observations may include baseline activity.",
+    "Guest logs can be tampered with after compromise; canaries/checksums detect some collection failures, not all evasion.",
+    "Simulator DNS/HTTP responses are laboratory data, not confirmed external infrastructure."
+  ],
+  "managed_metadata_reason": null,
+  "managed_metadata_status": "complete",
+  "missing_data_policy": "reject, never impute",
+  "post_launch_coverage_seconds": 45.704497,
+  "root_guid": "e6f64198-9719-6afc-8700-000000000600",
+  "root_timestamp": "2026-11-17T18:04:09.2641658Z",
+  "run_id": "8ce87075-5993-4845-8a0b-6aaa0d017c48",
+  "sample_tree_counts": {
+    "dns": 1.0,
+    "file_drops": 0.0,
+    "network": 2.0,
+    "processes": 1.0,
+    "registry": 9.0,
+    "remote_threads": 0.0
+  },
+  "sha256": "bd7832157bc4ccff2632e3e457d47042fddd8327a72549f1dda6bb822c85f04f",
+  "window_end": "2026-11-17T18:04:39.264165+00:00",
+  "window_seconds": 30
+}

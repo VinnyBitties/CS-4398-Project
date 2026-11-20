@@ -1,0 +1,231 @@
+{
+  "categories": {
+    "behavioral_columns": [
+      "dynamic_log_child_process_count",
+      "dynamic_log_network_count",
+      "dynamic_log_unique_dns_targets",
+      "dynamic_log_unique_file_targets",
+      "dynamic_log_unique_registry_targets",
+      "dynamic_archive_named_create_observed",
+      "dynamic_executable_named_create_observed",
+      "dynamic_autorun_location_observed"
+    ],
+    "columns": [
+      "static_log_file_size",
+      "static_section_count",
+      "static_weighted_entropy",
+      "static_max_entropy",
+      "static_log_imported_dll_count",
+      "static_log_imported_api_count",
+      "static_log_string_density_per_kib",
+      "static_executable_section_weighted_entropy",
+      "static_cli_present",
+      "static_log_cli_declared_type_refs",
+      "static_log_cli_declared_methods",
+      "static_cli_measurement_unavailable",
+      "dynamic_log_child_process_count",
+      "dynamic_log_network_count",
+      "dynamic_log_unique_dns_targets",
+      "dynamic_log_unique_file_targets",
+      "dynamic_log_unique_registry_targets",
+      "dynamic_archive_named_create_observed",
+      "dynamic_executable_named_create_observed",
+      "dynamic_autorun_location_observed"
+    ],
+    "dependencies": {
+      "managed_metadata.py": "8a5a5dc14f9f8029b1b9144d43c785b12c6e7a549b42cb4305e9667b11851c9c",
+      "native_features.py": "b722980f2c53bea3823fc04d588d94eea175c6416cd774a261d5ecb094458283",
+      "native_features_semantic.py": "5120385bbf1ea4328d5c8606f31c3d6dd8f8e607f944bd7ef035fcbebbb6d6c5",
+      "unified_features.py": "75a8b2ae50675dbbb0c9a6560272d8cd3da51a7b762f43bbf00ae3b2b05f8676"
+    },
+    "extractor_sha256": "62039adfa275a981ad3a6a2d8f0760a8ecfb526e8bb839f310bd6509f0c4ee4d",
+    "schema_version": "cfd-native-release-candidates-v2",
+    "static_columns": [
+      "static_log_file_size",
+      "static_section_count",
+      "static_weighted_entropy",
+      "static_max_entropy",
+      "static_log_imported_dll_count",
+      "static_log_imported_api_count",
+      "static_log_string_density_per_kib",
+      "static_executable_section_weighted_entropy",
+      "static_cli_present",
+      "static_log_cli_declared_type_refs",
+      "static_log_cli_declared_methods",
+      "static_cli_measurement_unavailable"
+    ]
+  },
+  "entropy": {
+    "behavioral_columns": [
+      "dynamic_log_child_process_count",
+      "dynamic_log_network_count",
+      "dynamic_log_unique_dns_targets",
+      "dynamic_log_unique_file_targets",
+      "dynamic_log_unique_registry_targets",
+      "dynamic_archive_named_create_observed"
+    ],
+    "columns": [
+      "static_log_file_size",
+      "static_section_count",
+      "static_weighted_entropy",
+      "static_max_entropy",
+      "static_log_imported_dll_count",
+      "static_log_imported_api_count",
+      "static_log_string_density_per_kib",
+      "static_executable_section_weighted_entropy",
+      "dynamic_log_child_process_count",
+      "dynamic_log_network_count",
+      "dynamic_log_unique_dns_targets",
+      "dynamic_log_unique_file_targets",
+      "dynamic_log_unique_registry_targets",
+      "dynamic_archive_named_create_observed"
+    ],
+    "dependencies": {
+      "managed_metadata.py": "8a5a5dc14f9f8029b1b9144d43c785b12c6e7a549b42cb4305e9667b11851c9c",
+      "native_features.py": "b722980f2c53bea3823fc04d588d94eea175c6416cd774a261d5ecb094458283",
+      "native_features_semantic.py": "5120385bbf1ea4328d5c8606f31c3d6dd8f8e607f944bd7ef035fcbebbb6d6c5",
+      "unified_features.py": "75a8b2ae50675dbbb0c9a6560272d8cd3da51a7b762f43bbf00ae3b2b05f8676"
+    },
+    "extractor_sha256": "62039adfa275a981ad3a6a2d8f0760a8ecfb526e8bb839f310bd6509f0c4ee4d",
+    "schema_version": "cfd-native-release-candidates-v2",
+    "static_columns": [
+      "static_log_file_size",
+      "static_section_count",
+      "static_weighted_entropy",
+      "static_max_entropy",
+      "static_log_imported_dll_count",
+      "static_log_imported_api_count",
+      "static_log_string_density_per_kib",
+      "static_executable_section_weighted_entropy"
+    ]
+  },
+  "managed": {
+    "behavioral_columns": [
+      "dynamic_log_child_process_count",
+      "dynamic_log_network_count",
+      "dynamic_log_unique_dns_targets",
+      "dynamic_log_unique_file_targets",
+      "dynamic_log_unique_registry_targets",
+      "dynamic_archive_named_create_observed"
+    ],
+    "columns": [
+      "static_log_file_size",
+      "static_section_count",
+      "static_weighted_entropy",
+      "static_max_entropy",
+      "static_log_imported_dll_count",
+      "static_log_imported_api_count",
+      "static_log_string_density_per_kib",
+      "static_executable_section_weighted_entropy",
+      "static_cli_present",
+      "static_log_cli_declared_type_refs",
+      "static_log_cli_declared_methods",
+      "static_cli_measurement_unavailable",
+      "dynamic_log_child_process_count",
+      "dynamic_log_network_count",
+      "dynamic_log_unique_dns_targets",
+      "dynamic_log_unique_file_targets",
+      "dynamic_log_unique_registry_targets",
+      "dynamic_archive_named_create_observed"
+    ],
+    "dependencies": {
+      "managed_metadata.py": "8a5a5dc14f9f8029b1b9144d43c785b12c6e7a549b42cb4305e9667b11851c9c",
+      "native_features.py": "b722980f2c53bea3823fc04d588d94eea175c6416cd774a261d5ecb094458283",
+      "native_features_semantic.py": "5120385bbf1ea4328d5c8606f31c3d6dd8f8e607f944bd7ef035fcbebbb6d6c5",
+      "unified_features.py": "75a8b2ae50675dbbb0c9a6560272d8cd3da51a7b762f43bbf00ae3b2b05f8676"
+    },
+    "extractor_sha256": "62039adfa275a981ad3a6a2d8f0760a8ecfb526e8bb839f310bd6509f0c4ee4d",
+    "schema_version": "cfd-native-release-candidates-v2",
+    "static_columns": [
+      "static_log_file_size",
+      "static_section_count",
+      "static_weighted_entropy",
+      "static_max_entropy",
+      "static_log_imported_dll_count",
+      "static_log_imported_api_count",
+      "static_log_string_density_per_kib",
+      "static_executable_section_weighted_entropy",
+      "static_cli_present",
+      "static_log_cli_declared_type_refs",
+      "static_log_cli_declared_methods",
+      "static_cli_measurement_unavailable"
+    ]
+  },
+  "native-v2": {
+    "behavioral_columns": [
+      "dynamic_log_child_process_count",
+      "dynamic_log_network_count",
+      "dynamic_log_dns_count",
+      "dynamic_log_file_count",
+      "dynamic_log_registry_count"
+    ],
+    "columns": [
+      "static_log_file_size",
+      "static_section_count",
+      "static_weighted_entropy",
+      "static_max_entropy",
+      "static_log_imported_dll_count",
+      "static_log_imported_api_count",
+      "static_log_string_density_per_kib",
+      "dynamic_log_child_process_count",
+      "dynamic_log_network_count",
+      "dynamic_log_dns_count",
+      "dynamic_log_file_count",
+      "dynamic_log_registry_count"
+    ],
+    "dependency_sha256": "75a8b2ae50675dbbb0c9a6560272d8cd3da51a7b762f43bbf00ae3b2b05f8676",
+    "extractor_sha256": "b722980f2c53bea3823fc04d588d94eea175c6416cd774a261d5ecb094458283",
+    "schema_version": "cfd-native-window30-v3",
+    "static_columns": [
+      "static_log_file_size",
+      "static_section_count",
+      "static_weighted_entropy",
+      "static_max_entropy",
+      "static_log_imported_dll_count",
+      "static_log_imported_api_count",
+      "static_log_string_density_per_kib"
+    ]
+  },
+  "targets": {
+    "behavioral_columns": [
+      "dynamic_log_child_process_count",
+      "dynamic_log_network_count",
+      "dynamic_log_unique_dns_targets",
+      "dynamic_log_unique_file_targets",
+      "dynamic_log_unique_registry_targets",
+      "dynamic_archive_named_create_observed"
+    ],
+    "columns": [
+      "static_log_file_size",
+      "static_section_count",
+      "static_weighted_entropy",
+      "static_max_entropy",
+      "static_log_imported_dll_count",
+      "static_log_imported_api_count",
+      "static_log_string_density_per_kib",
+      "dynamic_log_child_process_count",
+      "dynamic_log_network_count",
+      "dynamic_log_unique_dns_targets",
+      "dynamic_log_unique_file_targets",
+      "dynamic_log_unique_registry_targets",
+      "dynamic_archive_named_create_observed"
+    ],
+    "dependencies": {
+      "managed_metadata.py": "8a5a5dc14f9f8029b1b9144d43c785b12c6e7a549b42cb4305e9667b11851c9c",
+      "native_features.py": "b722980f2c53bea3823fc04d588d94eea175c6416cd774a261d5ecb094458283",
+      "native_features_semantic.py": "5120385bbf1ea4328d5c8606f31c3d6dd8f8e607f944bd7ef035fcbebbb6d6c5",
+      "unified_features.py": "75a8b2ae50675dbbb0c9a6560272d8cd3da51a7b762f43bbf00ae3b2b05f8676"
+    },
+    "extractor_sha256": "62039adfa275a981ad3a6a2d8f0760a8ecfb526e8bb839f310bd6509f0c4ee4d",
+    "schema_version": "cfd-native-release-candidates-v2",
+    "static_columns": [
+      "static_log_file_size",
+      "static_section_count",
+      "static_weighted_entropy",
+      "static_max_entropy",
+      "static_log_imported_dll_count",
+      "static_log_imported_api_count",
+      "static_log_string_density_per_kib"
+    ]
+  }
+}

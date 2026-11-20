@@ -1,0 +1,153 @@
+{
+  "delay_imports": {
+    "apis": [],
+    "dlls": []
+  },
+  "file_size": 2560,
+  "filename": "sample.bin",
+  "hash_reputation": {
+    "coverage": null,
+    "error": "OperationalError: reputation cache unavailable or invalid",
+    "hash_count": null,
+    "matched": null,
+    "source": null,
+    "status": "unavailable",
+    "updated_at": null,
+    "version": 1
+  },
+  "imports": {
+    "apis": [
+      "User32.dll!MessageBoxA"
+    ],
+    "dlls": [
+      "User32.dll"
+    ]
+  },
+  "parser_warnings": [
+    "Byte 0x00 makes up 61.5234% of the file's contents. This may indicate truncation / malformation."
+  ],
+  "pe": {
+    "architecture": "x86",
+    "compile_timestamp": null,
+    "entry_point": "0x1000",
+    "format": "PE32",
+    "image_base": "0x1000000",
+    "is_dll": false,
+    "machine": "0x14c"
+  },
+  "resources": {
+    "entries": [
+      {
+        "captured_size": 352,
+        "code_page": 0,
+        "error": null,
+        "file_offset": 1184,
+        "path": [
+          16,
+          1,
+          1033
+        ],
+        "rva": "0x20a0",
+        "sha256": "5bd23a4944a5436edb4ee1f56a61bdd203dd2bff542191cb0cad9c6d6f0e4c1d",
+        "size": 352,
+        "status": "complete"
+      },
+      {
+        "captured_size": 620,
+        "code_page": 0,
+        "error": null,
+        "file_offset": 1536,
+        "path": [
+          24,
+          1,
+          1033
+        ],
+        "rva": "0x2200",
+        "sha256": "6fb2f428ceb740481a982bfa8d6718e01c1cac512f6848fcd78ddf56df9ec877",
+        "size": 620,
+        "status": "complete"
+      }
+    ],
+    "version": 1
+  },
+  "schema_version": "1.2.0",
+  "sections": [
+    {
+      "characteristics": "0xc0000060",
+      "entropy": 1.7958,
+      "executable": false,
+      "name": "PELIB",
+      "raw_size": 512,
+      "readable": true,
+      "virtual_size": 4096,
+      "writable": true
+    },
+    {
+      "characteristics": "0x40000040",
+      "entropy": 3.9539,
+      "executable": false,
+      "name": ".rsrc",
+      "raw_size": 1536,
+      "readable": true,
+      "virtual_size": 4096,
+      "writable": false
+    }
+  ],
+  "sha256": "91de3a2577b3ca0f9a59cf9503cb567d7bd0165455d75c03ee44a4130c0a8cc1",
+  "strings": {
+    "count": 33,
+    "sample": [
+      "PELIB",
+      ".rsrc",
+      "Hello World!",
+      "MyProg",
+      "User32.dll",
+      "MessageBoxA",
+      "dummy.exe",
+      "TestExport",
+      "CallPlz",
+      "LBome",
+      "<assembly xmlns=\"urn:schemas-microsoft-com:asm.v1\" manifestVersion=\"1.0\">",
+      "  <trustInfo xmlns=\"urn:schemas-microsoft-com:asm.v3\">",
+      "    <security>",
+      "      <requestedPrivileges>",
+      "        <requestedExecutionLevel level=\"asInvoker\" uiAccess=\"false\"></requestedExecutionLevel>",
+      "      </requestedPrivileges>",
+      "    </security>",
+      "  </trustInfo>",
+      "  <dependency>",
+      "    <dependentAssembly>",
+      "      <assemblyIdentity type=\"win32\" name=\"Microsoft.Windows.Common-Controls\" version=\"6.0.0.0\" language=\"*\" processorArchitecture=\"*\" publicKeyToken=\"6595b64144ccf1df\"></assemblyIdentity>",
+      "    </dependentAssembly>",
+      "  </dependency>",
+      "</assembly>",
+      "VS_VERSION_INFO",
+      "StringFileInfo",
+      "040904B0",
+      "FileDescription",
+      "Simple a message box",
+      "FileVersion",
+      "1.0.0.0",
+      "VarFileInfo",
+      "Translation"
+    ],
+    "sample_limit": 33,
+    "truncated": false
+  },
+  "summary": {
+    "imported_api_count": 1,
+    "imported_dll_count": 1,
+    "section_count": 2,
+    "string_count": 33
+  },
+  "yara": {
+    "engine_version": "4.5.4",
+    "error": null,
+    "matches": [],
+    "rules_file": "wannacry.yar",
+    "rules_sha256": "af98f947ff400fe76f0d2f919749fba5f278d7a6d19c0f34de6eeddd44e52f91",
+    "status": "completed",
+    "version": 1,
+    "warnings": []
+  }
+}

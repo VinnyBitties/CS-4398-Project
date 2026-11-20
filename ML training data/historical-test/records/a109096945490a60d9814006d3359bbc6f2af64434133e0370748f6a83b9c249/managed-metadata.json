@@ -1,0 +1,11 @@
+{
+  "extractor_sha256": "8a5a5dc14f9f8029b1b9144d43c785b12c6e7a549b42cb4305e9667b11851c9c",
+  "metadata_bytes": null,
+  "method_def_rows": null,
+  "present": null,
+  "reason": "unsupported_tables_version",
+  "schema_version": "cfd-cli-declared-metadata-v1",
+  "sha256": "a109096945490a60d9814006d3359bbc6f2af64434133e0370748f6a83b9c249",
+  "status": "unavailable",
+  "type_ref_rows": null
+}

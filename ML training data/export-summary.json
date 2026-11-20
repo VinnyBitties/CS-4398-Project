@@ -1,0 +1,43 @@
+{
+  "created_at": "2026-11-20T18:56:01.713636+00:00",
+  "dataset_label_policy": "Publisher source-category labels: Sysinternals/PortableApps/Benign-NET vs MalwareBazaar; not Qwen and not independently adjudicated ground truth.",
+  "dataset_license_recorded": "MIT dataset card; third-party executable rights remain their owners' rights",
+  "datasets": {
+    "development": {
+      "class_counts": {
+        "0": 133,
+        "1": 154
+      },
+      "feature_supported_counts": {
+        "categories": 286,
+        "entropy": 286,
+        "managed": 286,
+        "native-v2": 287,
+        "targets": 287
+      },
+      "record_count": 287,
+      "software_groups": 207
+    },
+    "historical-test": {
+      "class_counts": {
+        "0": 50,
+        "1": 46
+      },
+      "feature_supported_counts": {
+        "categories": 96,
+        "entropy": 96,
+        "managed": 96,
+        "native-v2": 96,
+        "targets": 96
+      },
+      "record_count": 96,
+      "software_groups": 83
+    }
+  },
+  "no_samples_or_models_included": true,
+  "numeric_feature_replay_verified": true,
+  "python_version": "3.11.2 (main, Oct  7 2026, 12:35:07) [GCC 12.2.0]",
+  "redaction_count": 3832,
+  "source_files_rechecked": 1165,
+  "total_records": 383
+}
